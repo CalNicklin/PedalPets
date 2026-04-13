@@ -24,6 +24,7 @@ uint64_t sumSquares      = 0;
 uint32_t sampleCount     = 0;
 float    dcEstimate      = 2048.0f;
 float    currentRms      = 0.0f;
+float    envelope        = 0.0f;  // smoothed level for procedural motion
 
 // --- display --------------------------------------------------------------
 TFT_eSPI tft = TFT_eSPI();
@@ -60,7 +61,7 @@ void updateState(float rms, uint32_t now) {
   } else { lastTransition = now; }
 }
 
-void drawFrame() {
+void drawFrame(uint32_t now) {
   const Anim &a = ANIMS[state];
   int16_t x = (SCREEN_W - a.w) / 2;
   int16_t y = (SCREEN_H - a.h) / 2;
@@ -96,16 +97,23 @@ void loop() {
     sumSquares += (uint32_t)(ac * ac);
     if (++sampleCount >= WINDOW_SAMPLES) {
       currentRms = sqrtf((float)sumSquares / sampleCount);
+      // Envelope: fast attack, slow release — feels like a creature reacting
+      float coeff = (currentRms > envelope) ? 0.5f : 0.02f;
+      envelope += (currentRms - envelope) * coeff;
       sumSquares = 0; sampleCount = 0;
       updateState(currentRms, now);
     }
   }
 
-  // Animate at 8fps
-  if (now - lastFrameMs >= FRAME_MS) {
+  // Animate sprite cycle at 8fps; redraw at 30fps for smooth procedural motion
+  if (now - lastFrameMs >= 33) {
     lastFrameMs = now;
-    if (state != renderedState) { frameIdx = 0; renderedState = state; }
-    else                        { frameIdx = (frameIdx + 1) % ANIMS[state].frames; }
-    drawFrame();
+    static uint32_t lastSpriteAdvance = 0;
+    if (state != renderedState) { frameIdx = 0; renderedState = state; lastSpriteAdvance = now; }
+    else if (now - lastSpriteAdvance >= FRAME_MS) {
+      frameIdx = (frameIdx + 1) % ANIMS[state].frames;
+      lastSpriteAdvance = now;
+    }
+    drawFrame(now);
   }
 }
