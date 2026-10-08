@@ -1,7 +1,8 @@
 # Reactive Pet — Design
 
 Date: 2026-10-08
-Status: approved design; sub-project 1 ready for implementation planning
+Status: approved design, revised after review; sub-project 1 ready for
+implementation planning
 
 ## Goal
 
@@ -44,8 +45,38 @@ Non-goals: procedural bob/sway/wobble transforms on sprites (tried, rejected).
   seeded RNG. They compile and run under PlatformIO's `native` env.
 - Input producers and the renderer live under `src/platform/` and are the
   only code touching Arduino / TFT_eSPI.
-- Reactions and poses are **data**, generated from `art/manifest.toml` by
-  `tools/build_art.py` into `src/gen/pose_table.h`. No reaction is hard-coded.
+- Reactions, poses and idles are **data**. Core logic receives them as an
+  `ArtTables` struct (pointers + counts) and contains no hard-coded
+  reactions. Firmware passes the tables generated from `art/manifest.toml`;
+  tests pass small hand-written fixture tables.
+
+## Generated code
+
+`tools/build_art.py` (system Python ≥ 3.11 for `tomllib`, plus Pillow) reads
+`art/manifest.toml` and emits two headers:
+
+- `src/gen/pose_meta.h` — plain C++, no Arduino includes: pose ids, crop
+  rects, eye anchors, reactions, idles. Included by core and tests.
+- `src/gen/pose_pixels.h` — `PROGMEM` pixel data. Included only by
+  `renderer_tft`.
+
+Frames are **cropped to their bounding box**; each pose stores
+`{w, h, x_off, y_off}` relative to the 96×112 canvas. The renderer positions
+by offset. This keeps placeholder RGB565 frames ≈ 10 KB each and carries
+over unchanged to the 2 bpp art.
+
+`platformio.ini`:
+
+```ini
+[env:esp32dev]
+; existing settings, plus:
+board_build.partitions = huge_app.csv
+
+[env:native]
+platform = native
+test_framework = unity
+build_src_filter = +<core/>
+```
 
 ## Interfaces
 
@@ -53,7 +84,7 @@ Non-goals: procedural bob/sway/wobble transforms on sprites (tried, rejected).
 enum class EventType : uint8_t {
   Pick,        // note onset; strength 0..1 (light vs hard)
   BigHit,      // loud attack after relative quiet
-  Flurry,      // sustained high onset rate
+  Flurry,      // sustained high onset rate (re-sent while it continues)
   SustainStart, SustainEnd,
   SwellStart,  SwellPeak,
   Cut,         // sudden silence after loud playing
@@ -63,74 +94,126 @@ struct Features   { float level; float onsetRate; };  // level normalised 0..1, 
 ```
 
 Long silence is not an event: the Mood model handles it from `Features`.
+Events are processed in arrival order; several may arrive in one tick.
 
 ## Mood model
 
 Moods: `Asleep → Curious → IntoIt → Hyped`.
 
-- `energy` ∈ [0,1]: rises with `level` (fast attack), decays slowly
-  (release τ ≈ 8 s). `BigHit` adds +0.2, `Flurry` adds +0.1, `Pick` adds
-  +0.02 × strength.
-- Thresholds with hysteresis (up / down): IntoIt 0.35 / 0.25,
-  Hyped 0.70 / 0.55. Minimum dwell 2 s in a mood before moving.
-- `Asleep` after 10 s with `level` below the noise floor. Any event while
-  Asleep → `Curious`.
-- All constants live in one `MoodConfig` struct for tuning.
+Energy, updated every tick (`dt` seconds):
 
-Mood transitions trigger reactions: entering `Curious` from `Asleep` → **Wake**;
-entering `Asleep` → **Drift off**. Other transitions just switch idle loops.
+```
+if (level > energy) energy += (level - energy) * k_attack;   // k_attack = 0.3 per 10 ms tick
+energy *= exp(-dt / tau);                                    // tau = 8 s
+energy  = clamp(energy + eventBoost, 0, 1);
+```
+
+Event boosts: `BigHit` +0.2, `Flurry` +0.1, `Pick` +0.03 × strength.
+
+Transitions:
+
+- Awake moods by energy with hysteresis (up / down):
+  IntoIt 0.35 / 0.25, Hyped 0.70 / 0.55. These threshold-driven
+  transitions require ≥ 2 s dwell in the current mood.
+- `Curious → Asleep`: `level` below `noiseFloor` (0.03) for 10 s. The silence
+  timer runs **only in Curious**, so a quiet pet steps Hyped → IntoIt →
+  Curious → Asleep. Entering Asleep sets `energy = 0`.
+- `Asleep → Curious`: any event, **immediately** (no dwell). The event is
+  consumed by the mood model; it triggers no reaction of its own.
+
+All constants (`k_attack`, `tau`, boosts, thresholds, dwell, `noiseFloor`,
+silence timeout) live in one `MoodConfig` struct.
+
+Mood transitions trigger reactions: entering `Curious` from `Asleep` →
+**Wake**; entering `Asleep` → **DriftOff**. Other transitions only change the
+idle loop. A mood change during a reaction takes effect when that reaction
+ends.
 
 ## Idles
 
-Each mood has an idle loop of 2–3 poses.
+Each mood has an idle loop of 2–3 poses. When the idle starts or resumes
+(after a reaction or a mood change) it begins at pose 0.
 
-- Asleep / Curious: advance on a timer (≈ 600–900 ms per pose, jittered).
-- IntoIt / Hyped: **beat-step** — each `Pick` advances the idle one pose
-  (min 150 ms between steps); falls back to the timer if no pick for 1.5 s.
-  This makes the nod follow the player's rhythm.
+- Asleep: timer, 900 ms per pose (±20 % jitter).
+- Curious: timer, 700 ms per pose (±20 % jitter).
+- IntoIt / Hyped: **beat-step** — a `Pick` with strength ≥ 0.5, or every
+  2nd pick, advances the idle one pose, at most one step per 250 ms. With no
+  step for 1.5 s it falls back to a timer (IntoIt 500 ms, Hyped 400 ms).
+- Picks do not advance the idle while a reaction is playing.
 
 ## Reactions
 
 | Trigger | Reaction | Notes |
 |---|---|---|
 | BigHit | Blown back — "OHHH!" | |
-| Flurry | Frantic headbang / air-guitar | |
-| SustainStart | Awe — hands on head, leaning in | last step holds until `SustainEnd` (max 6 s) |
-| SwellStart | Crouch lower and lower | last step holds until `SwellPeak` (max 5 s), then leap step |
-| Cut | Freeze mid-move → point at you "YEAH!" | |
-| → Curious from Asleep | Wake — startled jolt, look around | |
-| → Asleep | Drift off — big yawn | |
+| Flurry | Frantic headbang / air-guitar | a repeat Flurry extends it |
+| SustainStart | Awe — hands on head, leaning in | holds until `SustainEnd` |
+| SwellStart | Crouch lower and lower, then leap | crouch holds until `SwellPeak` |
+| Cut | Freeze mid-move → point at you "YEAH!" | freeze uses `@current` |
+| Wake | Startled jolt, look around | from Asleep → Curious |
+| DriftOff | Big yawn | on entering Asleep |
 
-- Each reaction has ~2 variants; the picker never repeats the last variant
-  used for that trigger.
-- A reaction is a list of steps: `{ pose, hold_ms, eyes, hold_until }` where
-  `eyes` is a fixed eye state or `Auto`, and `hold_until` optionally names an
-  event that ends the step early / extends it up to the hold cap.
-- Reactions fire in moods Curious, IntoIt, Hyped. In Asleep, any event
-  produces Wake instead.
-- **Priority:** BigHit > Cut > Flurry > Swell > Sustain. A higher-priority
-  trigger interrupts the current reaction once its first step has shown for
-  ≥ 120 ms. Equal/lower-priority triggers are dropped (not queued).
-- **Cooldown:** 1.5 s per trigger type by default, overridable per reaction.
+### Steps
+
+A reaction is a list of steps:
+
+```
+{ pose, hold, eyes, until, until_max }
+```
+
+- `pose`: a pose id, or `"@current"` = keep whatever pose is on screen.
+- `hold`: ms, or `[min, max]` (picked uniformly at random each time it
+  plays).
+- `eyes`: an eye state, or omitted = `Auto`.
+- `until` (optional): event name. The step lasts at least `hold`, then
+  continues to wait until that event arrives or `until_max` elapses
+  (default 5000 ms). Either way it then **continues to the next step** (so
+  a Swell with no `SwellPeak` still leaps). If the `until` event already
+  arrived since the reaction started, the step plays its `hold` only.
+
+### Picking
+
+- Each reaction has a `trigger` and an optional `moods` filter. The picker
+  chooses among reactions matching the trigger and the current mood; none
+  matching → nothing plays.
+- Never repeat the last variant used for that trigger when another exists.
+- Reactions fire in Curious, IntoIt, Hyped. Asleep only produces Wake (via
+  the mood transition).
+- **Cooldown:** 1.5 s per trigger type, measured from reaction start,
+  overridable per reaction.
+
+### Priority and interrupts
+
+Order: **Wake** > BigHit > Cut > Flurry > Swell > Sustain > **DriftOff**.
+
+- Wake cannot be interrupted.
+- DriftOff is interrupted by any event (which wakes the pet → Wake).
+- Otherwise a higher-priority trigger interrupts the current reaction once
+  ≥ 120 ms have passed since that reaction started. Equal- or
+  lower-priority triggers are dropped (not queued).
+- **Extend rule:** a trigger equal to the one that started the current
+  reaction restarts the current step's hold timer instead of being dropped
+  (no cooldown applies). This keeps a continuing Flurry in one reaction
+  rather than reaction → idle → reaction.
 - When a reaction ends the Performer returns to the current mood's idle.
 
 ## Eyes
 
 Eye states: `Open, Blink, LookL, LookR, Wide, HappyClosed`.
 
-- Each pose declares an eye anchor `(x, y)` or `eyes = "baked"`
-  (e.g. turned-away poses) in which case no overlay is drawn.
-- `EyeController` in `Auto`: blink every 2–6 s (120 ms), occasional glance
-  L/R in every mood except Asleep (every 4–10 s, 400–800 ms). A reaction step's
-  explicit eye state overrides it.
+- Each pose declares an eye anchor `(x, y)` or `eyes = "baked"` (turned-away
+  poses, all Asleep poses). No overlay is drawn for baked poses.
+- `EyeController` in `Auto`: blink every 2–6 s (120 ms); glance L/R every
+  4–10 s for 400–800 ms. Off while Asleep. A reaction step's explicit eye
+  state overrides it.
 
 ## Art spec (applies to every art source)
 
 - Canvas 96×112 per pose, consistent scale, feet on a fixed baseline
-  (y = 108), character horizontally centred.
+  (y = 108), character horizontally centred. Stored cropped (see Generated
+  code).
 - Final palette exactly 4 colours: black, white, red, mid-grey. Stored at
-  2 bpp (≈ 2.7 KB/frame). Eye overlay sprites use the same palette plus a
-  transparent key.
+  2 bpp. Eye overlay sprites use the same palette plus a transparent key.
 - Background (off-white + optional red sun disc) is drawn by the renderer,
   not baked into frames.
 - Deliverable: PNG per pose + entries in `art/manifest.toml`.
@@ -141,77 +224,85 @@ Starter pack ≈ 10 idle poses + ≈ 40 reaction poses + 6 eye states.
 
 ```toml
 [poses.hyped_idle_1]
-src   = "art/poses/hyped_idle_1.png"
-eyes  = [44, 30]          # anchor, or "baked"
+src   = "art/poses/hyped_idle_1.png"   # or "<sheet.png>#<frame>" (placeholders)
+eyes  = [44, 30]                        # anchor on the 96x112 canvas, or "baked"
 
 [[reactions]]
 id       = "big_hit_a"
-trigger  = "BigHit"       # EventType name, or "Wake" / "DriftOff"
-cooldown = 1500           # optional
+trigger  = "BigHit"            # EventType name, or "Wake" / "DriftOff"
+moods    = ["IntoIt", "Hyped"] # optional
+cooldown = 1500                # optional
 steps = [
-  { pose = "recoil_1", hold = 80,  eyes = "Wide" },
-  { pose = "recoil_2", hold = 400, eyes = "Wide" },
-  { pose = "recoil_3", hold = 250 },              # eyes default Auto
+  { pose = "recoil_1", hold = 80,         eyes = "Wide" },
+  { pose = "recoil_2", hold = [350, 500], eyes = "Wide" },
+  { pose = "recoil_3", hold = 250 },
 ]
 
 [idles]
 Hyped = ["hyped_idle_1", "hyped_idle_2"]
 ```
 
-`tools/build_art.py` validates and fails the build on: unknown pose
-references, missing files, wrong canvas size, more than 4 colours after
-quantisation, content below the baseline, missing eye anchor. It also writes
-`art/contact_sheet.png` for review.
-
 ## Sub-project 1 — Brain + Performer with mock input (implement now)
 
 Scope:
-1. Split `src/main.cpp` into `src/core/` (`music_event.h`, `mood.*`,
-   `brain.*`, `performer.*`, `eyes.*`, `rng.h`) and `src/platform/`
-   (`mock_input.*`, `renderer_tft.*`, `main.cpp`).
-2. `tools/build_art.py` reading `art/manifest.toml` (Python `tomllib`),
-   emitting `src/gen/pose_table.h`. For sub-project 1 it also accepts
-   `src = "<sheet.png>#<frame>"` to slice the Evil Wizard sheets and emit
-   RGB565 placeholder frames; 2 bpp output arrives with sub-project 2.
-   Replaces `tools/convert_sprites.py`.
-3. Placeholder manifest mapping wizard frames to the poses/reactions above
-   (e.g. Idle → Curious idle, Run → IntoIt idle, Attack1 → Hyped idle,
-   Take hit → BigHit / Wake, Attack2 → Flurry, Jump → Swell / Sustain,
-   Death → Drift off / Asleep idle). Eye overlay is drawn as simple
-   placeholder primitives at each anchor to exercise the mechanism.
-4. Mock input over serial (115200):
-   `p` pick, `P` hard pick, `h` BigHit, `f` Flurry (burst of picks + event),
-   `s`/`S` sustain start/end, `w`/`W` swell start/peak, `c` Cut,
-   `+`/`-` level up/down, `0` silence, `1`–`3` run scripted timeline,
-   `d` toggle debug HUD (mood, energy, current reaction/step), `r` reset.
+
+1. Split `src/main.cpp` into `src/core/` (`music_event.h`, `art_tables.h`,
+   `mood.*`, `brain.*`, `performer.*`, `eyes.*`, `rng.h`) and
+   `src/platform/` (`mock_input.*`, `renderer_tft.*`, `main.cpp`).
+2. `tools/build_art.py` as described in Generated code, replacing
+   `tools/convert_sprites.py`. Validation in this sub-project: unknown pose
+   references, missing files, out-of-range sheet frames, every pose has an
+   eye anchor or `baked`, every mood has a non-empty idle. Palette, canvas,
+   baseline checks and the contact sheet are **deferred to sub-project 2**
+   (wizard frames would fail them).
+3. Placeholder manifest mapping wizard sheet frames (Idle/Run/Attack1/
+   Attack2: 8 frames, Death: 7, Take hit: 3, Jump/Fall: 2) to poses, e.g.
+   Idle → Curious idle, Run → IntoIt idle, Attack1 → Hyped idle,
+   Take hit → BigHit / Wake, Attack2 → Flurry, Jump/Fall → Swell / Sustain,
+   Death → DriftOff / Asleep idle. One reaction per trigger is enough; the
+   picker supports variants but the placeholder manifest need not supply
+   them. Eye overlay drawn as simple placeholder primitives at each anchor.
+4. Mock input over serial (115200), ignoring `\r` and `\n`:
+   `p` pick (strength 0.4), `P` hard pick (strength 0.9), `h` BigHit,
+   `f` Flurry (burst of picks + event), `s`/`S` sustain start/end,
+   `w`/`W` swell start/peak, `c` Cut, `+`/`-` base level ±0.1,
+   `0` silence, `1`–`3` run scripted timeline, `d` toggle debug HUD (mood,
+   energy, reaction, step), `r` reset. Every pick also lifts `level` to at
+   least its strength, decaying back to the base level over 300 ms, so
+   repeated picking alone can reach IntoIt.
 5. Scripted timelines as `{t_ms, action}` arrays; script 1 is a 60 s "set":
    silence → wake → noodling → build → flurry → big hit → cut → sustain →
    fade → asleep.
-6. Remove the current threshold state machine; LiveAudio is not wired in
+6. Remove the current threshold state machine. LiveAudio is not wired in
    this sub-project (the ADC sampling code is retained but unused until
    sub-project 3).
 
-Tests (`pio test -e native`, Unity framework):
-- Mood: energy rise/decay, hysteresis, min dwell, Asleep after 10 s silence,
-  Wake / DriftOff triggered on the right transitions.
-- Picker: correct reaction per trigger, no consecutive repeat of a variant,
-  cooldown respected, Asleep → Wake.
-- Performer: step timing, `hold_until` ends early on the named event and
-  caps at max, priority interrupt only after 120 ms of first step,
-  lower-priority dropped, return to idle, beat-step idle advance + timer
-  fallback.
-- Eyes: blink/glance scheduling with seeded RNG; reaction override.
+Tests (`pio test -e native`, Unity, fixture `ArtTables`):
 
-Acceptance: all native tests pass; on device, script 1 plays end to end
-with reactions visibly in sync with the HUD, and keyboard events produce
-reactions within one frame (≤ 33 ms).
+- Mood: energy formula, hysteresis, dwell on threshold transitions only,
+  immediate wake, silence timer only in Curious, energy reset on sleep,
+  Wake / DriftOff on the right transitions.
+- Picker: trigger + mood filter, no consecutive repeat of a variant,
+  cooldown from reaction start, Asleep consumes events.
+- Performer: step timing incl. `[min,max]` holds, `until` (early event,
+  late event, `until_max` expiry continues), `@current`, interrupt only
+  ≥ 120 ms after reaction start, Wake uninterruptible, DriftOff
+  interruptible, lower-priority dropped, extend rule, idle resumes at
+  pose 0, beat-step rules + timer fallback, no beat-step during reactions.
+- Eyes: blink/glance scheduling with seeded RNG, off in Asleep, reaction
+  override.
+
+Acceptance: all native tests pass; firmware builds and fits the
+`huge_app` partition; on device, script 1 plays end to end with reactions
+visibly in sync with the HUD, and keyboard events produce reactions within
+one frame (≤ 33 ms).
 
 ## Sub-project 2 — Art pipeline (own spec later)
 
 Blender spike: concept image → image-to-3D → Rigify → 3–4 toon/ink-rendered
-poses viewed on the TFT. Then full pack + 2 bpp storage + real eye set.
-Open: which image-to-3D / auto-rig route is fully hands-off (Mixamo has no
-API).
+poses viewed on the TFT. Then full pack, 2 bpp storage, real eye set, and
+the deferred validator checks + contact sheet. Open: which image-to-3D /
+auto-rig route is fully hands-off (Mixamo has no API).
 
 ## Sub-project 3 — Live signal detection (own spec later)
 
@@ -219,3 +310,8 @@ Detectors for Pick / BigHit / Flurry / Sustain / Swell / Cut and `Features`
 from the ADC, behind the same event interface. Tuned natively against
 recorded guitar WAVs with expected-event fixtures. Blocked on soldering the
 1/4" input jack.
+
+## Deferred ideas
+
+- A single pending slot (~300 ms expiry) so a Cut straight after a BigHit
+  still plays. Add only if dropped Cuts feel wrong in practice.
