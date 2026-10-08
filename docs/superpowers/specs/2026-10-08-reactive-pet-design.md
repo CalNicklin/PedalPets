@@ -229,7 +229,7 @@ eyes  = [44, 30]                        # anchor on the 96x112 canvas, or "baked
 
 [[reactions]]
 id       = "big_hit_a"
-trigger  = "BigHit"            # EventType name, or "Wake" / "DriftOff"
+trigger  = "BigHit"            # BigHit, Cut, Flurry, Swell, Sustain, Wake, DriftOff
 moods    = ["IntoIt", "Hyped"] # optional
 cooldown = 1500                # optional
 steps = [
