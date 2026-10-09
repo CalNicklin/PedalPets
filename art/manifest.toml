@@ -1,0 +1,138 @@
+# Placeholder art: Evil Wizard sheet frames standing in for the real pet
+# until the Blender pack (sub-project 2). [[sheet_poses]] expands to poses
+# named <prefix>_<frame>. Eye anchors are rough guesses — the overlay only
+# exists to exercise the mechanism.
+
+[[sheet_poses]]
+prefix = "idle"
+src    = "sprites/EVil Wizard 2/Sprites/Idle.png"
+frames = [0, 1, 2, 3, 4, 6]
+eyes   = [52, 30]
+
+[[sheet_poses]]
+prefix = "run"
+src    = "sprites/EVil Wizard 2/Sprites/Run.png"
+frames = [0, 2, 4, 6]
+eyes   = [52, 36]
+
+[[sheet_poses]]
+prefix = "attack1"
+src    = "sprites/EVil Wizard 2/Sprites/Attack1.png"
+frames = [0, 3, 6, 7]
+eyes   = [40, 36]
+
+[[sheet_poses]]
+prefix = "attack2"
+src    = "sprites/EVil Wizard 2/Sprites/Attack2.png"
+frames = [0, 1, 2, 3, 4, 5, 6, 7]
+eyes   = [52, 30]
+
+[[sheet_poses]]
+prefix = "hit"
+src    = "sprites/EVil Wizard 2/Sprites/Take hit.png"
+frames = [0, 1, 2]
+eyes   = [52, 30]
+
+[[sheet_poses]]
+prefix = "jump"
+src    = "sprites/EVil Wizard 2/Sprites/Jump.png"
+frames = [0, 1]
+eyes   = [48, 34]
+
+[[sheet_poses]]
+prefix = "fall"
+src    = "sprites/EVil Wizard 2/Sprites/Fall.png"
+frames = [0, 1]
+eyes   = [52, 30]
+
+[[sheet_poses]]
+prefix = "death"
+src    = "sprites/EVil Wizard 2/Sprites/Death.png"
+frames = [2, 4, 5, 6]
+eyes   = "baked"
+
+[idles]
+Asleep  = ["death_5", "death_6"]
+Curious = ["idle_0", "idle_2", "idle_4"]
+IntoIt  = ["run_0", "run_2", "run_4", "run_6"]
+Hyped   = ["attack1_0", "attack1_3", "attack1_6"]
+
+[[reactions]]
+id      = "big_hit_a"
+trigger = "BigHit"
+steps = [
+  { pose = "hit_0", hold = 80,         eyes = "Wide" },
+  { pose = "hit_1", hold = [350, 500], eyes = "Wide" },
+  { pose = "hit_2", hold = 250 },
+]
+
+[[reactions]]
+id      = "big_hit_b"
+trigger = "BigHit"
+moods   = ["Hyped"]
+steps = [
+  { pose = "fall_0",    hold = 80,         eyes = "Wide" },
+  { pose = "fall_1",    hold = [400, 600], eyes = "Wide" },
+  { pose = "attack1_7", hold = 250 },
+]
+
+[[reactions]]
+id      = "flurry_a"
+trigger = "Flurry"
+steps = [
+  { pose = "attack2_0", hold = [70, 90] },
+  { pose = "attack2_1", hold = [70, 90] },
+  { pose = "attack2_2", hold = [70, 90] },
+  { pose = "attack2_3", hold = [70, 90] },
+  { pose = "attack2_4", hold = [70, 90] },
+  { pose = "attack2_5", hold = [70, 90] },
+  { pose = "attack2_6", hold = [70, 90] },
+  { pose = "attack2_7", hold = [120, 160] },
+]
+
+[[reactions]]
+id      = "swell_a"
+trigger = "Swell"
+steps = [
+  { pose = "idle_6", hold = 200 },
+  { pose = "jump_0", hold = 300, until = "SwellPeak", until_max = 5000 },
+  { pose = "jump_1", hold = 400, eyes = "Wide" },
+  { pose = "fall_1", hold = 200 },
+]
+
+[[reactions]]
+id      = "sustain_a"
+trigger = "Sustain"
+steps = [
+  { pose = "idle_1", hold = 200, eyes = "Wide" },
+  { pose = "jump_0", hold = 400, eyes = "Wide", until = "SustainEnd", until_max = 6000 },
+  { pose = "idle_0", hold = 300, eyes = "HappyClosed" },
+]
+
+[[reactions]]
+id      = "cut_a"
+trigger = "Cut"
+steps = [
+  { pose = "@current",  hold = 600 },
+  { pose = "attack1_7", hold = 700, eyes = "Wide" },
+]
+
+[[reactions]]
+id      = "wake_a"
+trigger = "Wake"
+steps = [
+  { pose = "hit_0",  hold = 120, eyes = "Wide" },
+  { pose = "idle_0", hold = 400, eyes = "LookL" },
+  { pose = "idle_0", hold = 400, eyes = "LookR" },
+  { pose = "idle_0", hold = 300 },
+]
+
+[[reactions]]
+id      = "drift_off_a"
+trigger = "DriftOff"
+steps = [
+  { pose = "idle_3",  hold = 600, eyes = "HappyClosed" },
+  { pose = "death_2", hold = 400 },
+  { pose = "death_4", hold = 400 },
+  { pose = "death_6", hold = 500 },
+]
