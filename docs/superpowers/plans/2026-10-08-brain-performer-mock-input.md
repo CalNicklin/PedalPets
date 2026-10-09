@@ -844,7 +844,8 @@ void test_beat_idle_falls_back_to_timer() {
 void test_no_beat_step_during_reaction() {
   p->reset(Mood::IntoIt, t);
   p->start(FX_BIGHIT, Trigger::BigHit, t);
-  t += 300; p->onPick(0.9f, t);
+  run(Mood::IntoIt, 300);
+  p->onPick(0.9f, t);
   TEST_ASSERT_EQUAL_UINT16(8, p->pose());
   run(Mood::IntoIt, 200);
   TEST_ASSERT_FALSE(p->playing());
