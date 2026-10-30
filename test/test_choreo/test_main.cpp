@@ -83,6 +83,8 @@ static void frames(Mood m, int n, float energy = 0) {
   for (int i = 0; i < n; i++) { t += 30; ch->tick(m, energy, t); }
 }
 static void send(EventType e, Mood m) { ch->onEvent({e, t, 1.0f}, m, t); }
+static uint32_t beatN = 0;
+static void beat(Mood m) { ch->onBeat(beatN, m, t); beatN += 2; }   // accents fall every other beat
 
 static void fresh(Mood m) {
   delete ch;
@@ -111,23 +113,25 @@ void test_idle_moves_play_on_their_gap() {
   TEST_ASSERT_TRUE(peak > 0.5f);
 }
 
-void test_picks_start_beat_moves_only_when_grooving() {
+void test_beats_start_dance_moves_only_when_grooving() {
   fresh(Mood::Curious);
-  send(EventType::Pick, Mood::Curious);
+  beat(Mood::Curious);
   TEST_ASSERT_EQUAL_FLOAT(0, ch->weightOf(BEAT_B));
   fresh(Mood::IntoIt);
-  send(EventType::Pick, Mood::IntoIt);
+  send(EventType::Pick, Mood::IntoIt);                    // a note on its own doesn't: the beat does
+  TEST_ASSERT_EQUAL_FLOAT(0, ch->weightOf(BEAT_B));
+  beat(Mood::IntoIt);
   TEST_ASSERT_TRUE(ch->weightOf(BEAT_B) > 0);
 }
 
-void test_rapid_picks_wait_for_beat_move_to_progress() {
+void test_fast_beats_wait_for_the_dance_move_to_progress() {
   fresh(Mood::IntoIt);
-  send(EventType::Pick, Mood::IntoIt);
+  beat(Mood::IntoIt);
   frames(Mood::IntoIt, 1);
-  send(EventType::Pick, Mood::IntoIt);                    // too soon: same move carries on
+  beat(Mood::IntoIt);                                     // too soon: same move carries on
   TEST_ASSERT_EQUAL_INT(1, ch->activeCount());
   frames(Mood::IntoIt, 3);
-  send(EventType::Pick, Mood::IntoIt);                    // 4/6 through: crossfade to a new one
+  beat(Mood::IntoIt);                                     // 4/6 through: crossfade to a new one
   TEST_ASSERT_EQUAL_INT(2, ch->activeCount());
 }
 
@@ -139,13 +143,57 @@ void test_long_beat_move_plays_until_its_tail() {
   ch = new Choreographer(CH, rng, cfg);
   t = 0;
   ch->reset(Mood::IntoIt, t);
-  send(EventType::Pick, Mood::IntoIt);
+  beat(Mood::IntoIt);
   frames(Mood::IntoIt, 4);
-  send(EventType::Pick, Mood::IntoIt);                    // 4/6 through but not at its tail: carries on
+  beat(Mood::IntoIt);                                     // 4/6 through but not at its tail: carries on
   TEST_ASSERT_EQUAL_INT(1, ch->activeCount());
   frames(Mood::IntoIt, 1);
-  send(EventType::Pick, Mood::IntoIt);                    // at its tail: crossfade
+  beat(Mood::IntoIt);                                     // at its tail: crossfade
   TEST_ASSERT_EQUAL_INT(2, ch->activeCount());
+}
+
+static const VocabEntry TWO_BEATS[] = {{BEAT_B, 1, MoveKind::Beat}, {IDLE_A, 1, MoveKind::Beat}};
+
+void test_dance_moves_repeat_in_phrases() {
+  Choreography c = make();
+  c.vocab = TWO_BEATS;
+  c.moods[(int)Mood::IntoIt].firstVocab = 0;
+  c.moods[(int)Mood::IntoIt].vocabCount = 2;
+  delete ch;
+  rng = Rng(1);
+  ch = new Choreographer(c, rng);
+  t = 0;
+  ch->reset(Mood::IntoIt, t);
+  int repeats = 0, changes = 0, last = -1;
+  for (int i = 0; i < 24; i++) {
+    beat(Mood::IntoIt);
+    int now = ch->weightOf(BEAT_B) >= ch->weightOf(IDLE_A) ? BEAT_B : IDLE_A;
+    if (last >= 0) (now == last ? repeats : changes)++;
+    last = now;
+    frames(Mood::IntoIt, 7);                              // let each one finish
+  }
+  TEST_ASSERT_TRUE(repeats >= 6);                         // phrases: the same move again
+  TEST_ASSERT_TRUE(changes >= 3);                         // ...then something new
+}
+
+void test_the_groove_follows_the_beat() {
+  Choreography c = make();
+  c.moods[(int)Mood::IntoIt].groove = BEAT_B + 1;         // beat_b's curve, once per beat
+  c.moods[(int)Mood::IntoIt].grooveBeats = 1;
+  delete ch;
+  rng = Rng(1);
+  ch = new Choreographer(c, rng);
+  t = 0;
+  ch->reset(Mood::IntoIt, t);
+  ch->setBeatPhase(2.0f / 6);                             // beat_b frame 2: b = 4
+  frames(Mood::IntoIt, 30);                               // eased in
+  TEST_ASSERT_FLOAT_WITHIN(0.2f, 4.0f * 0.8f, ch->pose().ch[2]);   // at the groove's strength (energy 0)
+  ch->setBeatPhase(0);
+  frames(Mood::IntoIt, 1);
+  TEST_ASSERT_FLOAT_WITHIN(0.2f, 0.0f, ch->pose().ch[2]);
+  ch->setBeatPhase(2.0f / 6);
+  frames(Mood::Curious, 40);                              // not dancing: it fades away
+  TEST_ASSERT_FLOAT_WITHIN(0.2f, 0.0f, ch->pose().ch[2]);
 }
 
 void test_intent_vocabulary_replaces_mood_idles() {
@@ -189,7 +237,7 @@ void test_gait_channel_is_never_amplified_by_the_beat() {
   ch = new Choreographer(c, rng);
   t = 0;
   ch->reset(Mood::IntoIt, t);
-  send(EventType::Pick, Mood::IntoIt);
+  beat(Mood::IntoIt);
   float peak = 0;
   for (int i = 0; i < 6; i++) { frames(Mood::IntoIt, 1, 1.0f); peak = fmaxf(peak, ch->pose().ch[2]); }
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 4.0f, peak);              // beat_b peaks at 4 (16 quarter units)
@@ -342,8 +390,10 @@ int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_stance_eases_toward_mood);
   RUN_TEST(test_idle_moves_play_on_their_gap);
-  RUN_TEST(test_picks_start_beat_moves_only_when_grooving);
-  RUN_TEST(test_rapid_picks_wait_for_beat_move_to_progress);
+  RUN_TEST(test_beats_start_dance_moves_only_when_grooving);
+  RUN_TEST(test_dance_moves_repeat_in_phrases);
+  RUN_TEST(test_the_groove_follows_the_beat);
+  RUN_TEST(test_fast_beats_wait_for_the_dance_move_to_progress);
   RUN_TEST(test_long_beat_move_plays_until_its_tail);
   RUN_TEST(test_intent_vocabulary_replaces_mood_idles);
   RUN_TEST(test_gaze_points_the_head);

@@ -110,6 +110,20 @@ move("tail_pump", 12, tail=[(0, 0), (3, -18), (8, 6), (12, 0)], squash=[(0, 0), 
      pitch=[(0, 0), (3, 6), (12, 0)])
 move("wing_flick", 12, **both([(0, 0), (4, 45), (12, 0)]), pitch=[(0, 0), (4, 8), (12, 0)])
 
+# --- the groove: a bar of two beats, looped in time (see skeleton_moves.py) -------------
+def bounce(depth, at=3, back=11, frames=32, beats=2):
+    per = frames // beats
+    keys = [(0, 0)]
+    for b in range(beats):
+        keys += [(b * per + at, depth), (b * per + back, depth * 0.08), ((b + 1) * per, 0)]
+    return keys
+
+
+move("groove", 32, legs=bounce(0.5), squash=bounce(0.6), pitch=bounce(12, 5, 13), tail=bounce(-12, 4, 12),
+     crest=bounce(-10, 5, 13), look=[(0, 0), (8, 10), (16, 0), (24, -10), (32, 0)])
+move("groove_hyped", 32, legs=bounce(0.9), squash=bounce(1.0), pitch=bounce(20, 4, 12), lean=bounce(6, 4, 12),
+     tail=bounce(-18, 4, 12), crest=bounce(-24, 4, 12), jaw=bounce(16, 4, 11), **both(bounce(40, 4, 12)))
+
 # --- hyped: beat moves (wing beats every 8 frames; faster blurs on the LCD) -----
 # Landings hold the squash a few frames and ease out; an instant rebound reads as a jolt.
 move("hop_flap", 28, twos=True, hop=[(0, 0), (2, 0), (8, 18), (12, 21), (16, 18), (22, 0), (28, 0)],
@@ -215,14 +229,15 @@ VOCAB = {
                 ("double_blink", 1, "idle"), ("crest_flick", 2, "idle"), ("preen", 1, "idle"),
                 ("tail_flick", 2, "idle"), ("hop_small", 3, "idle"), ("hop_fwd", 4, "idle"), ("hop_fwd2", 3, "idle"),
                 ("turn_round", 3, "idle"), ("peck", 2, "idle"), ("look_you", 2, "idle"), ("shake", 1, "idle")],
-    "IntoIt":  [("nod", 4, "beat"), ("bob", 3, "beat"), ("side_nod", 2, "beat"), ("tail_pump", 2, "beat"),
-                ("wing_flick", 2, "beat"), ("hop_beat", 3, "beat"), ("hop_fwd", 2, "beat"), ("blink", 3, "idle"),
-                ("crest_flick", 1, "idle"), ("look_you", 1, "idle"), ("shake", 1, "idle"), ("turn_round", 1, "idle")],
+    "IntoIt":  [("wing_flick", 2, "beat"), ("hop_beat", 3, "beat"), ("hop_fwd", 2, "beat"), ("tail_pump", 2, "beat"),
+                ("side_nod", 1, "beat"), ("blink", 3, "idle"), ("crest_flick", 1, "idle"),
+                ("look_you", 1, "idle"), ("shake", 1, "idle"), ("turn_round", 1, "idle")],
     "Hyped":   [("frenzy_flight", 6, "beat"), ("pogo", 4, "beat"), ("hop_flap", 4, "beat"), ("flap_burst", 1, "beat"),
                 ("headbang", 1, "beat"), ("hop_travel", 1, "beat"), ("turn_hop", 1, "beat"), ("blink", 1, "idle")],
 }
 IDLE_GAPS = {"Asleep": (1800, 4500), "Curious": (500, 1600), "IntoIt": (1200, 3000), "Hyped": (1200, 3000)}
-BEAT_MS = {"Asleep": 0, "Curious": 0, "IntoIt": 560, "Hyped": 480}
+BEAT_MS = {"Asleep": 0, "Curious": 0, "IntoIt": 560, "Hyped": 500}
+GROOVES = {"IntoIt": ("groove", 2), "Hyped": ("groove_hyped", 2)}   # (move, beats it spans)
 
 # What he does when the Mind wants something (idle vocabularies; see
 # docs/superpowers/specs/2026-10-30-inner-life-design.md). Gaze is the Mind's:

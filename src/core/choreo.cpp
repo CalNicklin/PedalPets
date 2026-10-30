@@ -18,6 +18,9 @@ void Choreographer::reset(Mood mood, uint32_t now) {
   reactionTrigger_ = Trigger::None;
   intent_ = Intent::None;
   gazeWeight_ = 0;
+  beatPhase_ = grooveWeight_ = 0;
+  grooveMove_ = -1;
+  phraseLeft_ = 0;
   seen_ = 0;
   frozenUntil_ = now;
   lastPick_ = lastBeat_ = now;
@@ -224,7 +227,21 @@ void Choreographer::startBeat(Mood mood, uint32_t now) {
     if (s.frame < fmaxf(cfg_.beatRetrigger * frames, frames - cfg_.beatTailFrames)) return;
     s.target = 0;
   }
-  int move = pickVocab(mood, MoveKind::Beat);
+  // Dancers repeat: keep the same move for a phrase, then change.
+  int move = -1;
+  if (phraseLeft_ > 0 && lastBeatMove_ >= 0 && allowed(lastBeatMove_)) {
+    const MoodStyle& st = c_->moods[(int)mood];
+    for (int i = 0; i < st.vocabCount; i++) {
+      const VocabEntry& v = c_->vocab[st.firstVocab + i];
+      if (v.move == lastBeatMove_ && v.kind == MoveKind::Beat) move = lastBeatMove_;
+    }
+  }
+  if (move >= 0) {
+    phraseLeft_--;
+  } else {
+    move = pickVocab(mood, MoveKind::Beat);
+    phraseLeft_ = (int)rng_.range(cfg_.phraseMin, cfg_.phraseMax) - 1;
+  }
   if (move < 0) return;
   Slot* s = add(move, now, 1.0f, 1.0f);
   s->beat = true;
@@ -280,13 +297,18 @@ void Choreographer::fire(Trigger t, Mood mood, uint32_t now) {
 
 void Choreographer::onEvent(const MusicEvent& e, Mood mood, uint32_t now) {
   seen_ |= eventBit(e.type);
-  if (e.type == EventType::Pick) {
+  if (e.type == EventType::Pick) {     // notes feed the beat clock; the beat starts the moves
     lastPick_ = now;
-    if (mood == Mood::IntoIt || mood == Mood::Hyped) startBeat(mood, now);
     return;
   }
   Trigger t = triggerFor(e.type);
   if (t != Trigger::None) fire(t, mood, now);
+}
+
+void Choreographer::onBeat(uint32_t beat, Mood mood, uint32_t now) {
+  bool dancing = mood == Mood::IntoIt || mood == Mood::Hyped;
+  lastBeat_ = now;
+  if (dancing && cfg_.accentEvery && beat % cfg_.accentEvery == 0) startBeat(mood, now);
 }
 
 void Choreographer::onMoodChange(MoodChange change, Mood mood, uint32_t now) {
@@ -329,8 +351,6 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
 
   bool reacting = reactionSlot() != nullptr;
   if (!reacting && (int32_t)(now - nextIdle_) >= 0) startIdle(mood, now);
-  if (!reacting && st.beatMs && now - lastPick_ > cfg_.pickTimeoutMs && now - lastBeat_ >= st.beatMs)
-    startBeat(mood, now);
 
   // Travel: x tracks move the pet forward, by the move's weight like its legs
   // (a fading walk takes smaller steps and covers less ground; never amplified).
@@ -362,6 +382,24 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
     }
   }
 
+  // The groove: its move looped in time with the beat while it dances; it eases
+  // in and out, and swaps (through silence) when the mood brings another.
+  int want = (mood == Mood::IntoIt || mood == Mood::Hyped) ? st.groove - 1 : -1;
+  if (want != grooveMove_) {
+    grooveWeight_ = fmaxf(0.0f, grooveWeight_ - cfg_.grooveEase);
+    if (grooveWeight_ <= 0) grooveMove_ = want;
+  } else if (grooveMove_ >= 0) {
+    grooveWeight_ = fminf(1.0f, grooveWeight_ + cfg_.grooveEase);
+  }
+  Slot groove;
+  if (grooveMove_ >= 0) {
+    groove.move = (int8_t)grooveMove_;
+    int frames = c_->moves[grooveMove_].frames;
+    groove.frame = (uint8_t)fminf(frames - 1, beatPhase_ * frames);
+  }
+  float grooveAmp = grooveWeight_ * (cfg_.grooveAmpBase + cfg_.grooveAmpGain * energy) *
+                    (reactionSlot() ? cfg_.duck : 1.0f);
+
   float beatAmp = cfg_.beatAmpBase + cfg_.beatAmpGain * energy;
   for (int ch = 0; ch < c_->channelCount; ch++) {
     if (ch == c_->xChannel) { pose_.ch[ch] = stageX_; continue; }
@@ -370,6 +408,7 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
     float amp = ch == c_->strideChannel ? 1.0f : beatAmp;   // steps must match the travel
     for (const Slot& s : slots_)
       if (s.move >= 0) v += s.weight * (s.beat ? amp : 1.0f) * sample(s, ch);
+    if (grooveMove_ >= 0 && grooveAmp > 0 && ch != c_->strideChannel) v += grooveAmp * sample(groove, ch);
     pose_.ch[ch] = v;
   }
   if (gazeWeight_ > 0) {                          // the Mind's gaze over the moves

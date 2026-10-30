@@ -45,7 +45,9 @@ struct MoodStyle {
   uint16_t firstVocab;
   uint8_t  vocabCount;
   uint16_t idleGapMin, idleGapMax;      // ms between idle moves
-  uint16_t beatMs;                      // beat-move tempo with no picks (0 = none)
+  uint16_t beatMs;                      // its own tempo when nobody's playing a steady one (0 = none)
+  uint8_t  groove;                      // the groove: a move (id + 1; 0 = none) looped in time
+  uint8_t  grooveBeats;                 // ... spanning this many beats
 };
 
 struct ReactionMoves { Trigger trigger; uint8_t first; uint8_t count; };  // into reactionMoveIds
@@ -95,7 +97,10 @@ struct ChoreoConfig {
   uint32_t cooldownMs       = 1500;
   float    beatRetrigger    = 0.6f;    // a new beat move waits until the last is this far through
   int      beatTailFrames   = 12;      // ...or, for long moves, until it is this close to its end
-  uint32_t pickTimeoutMs    = 1500;    // no picks for this long -> mood tempo drives beats
+  uint8_t  accentEvery      = 2;       // a dance move starts every this many beats...
+  uint8_t  phraseMin = 2, phraseMax = 4;   // ...and repeats for a phrase before changing
+  float    grooveEase       = 0.06f;   // the groove comes in and goes out this fast (per frame)
+  float    grooveAmpBase    = 0.8f, grooveAmpGain = 0.4f;   // and grows with energy
   float    beatAmpBase      = 0.7f;    // beat moves scale with energy: base + energy * gain
   float    beatAmpGain      = 0.5f;
   float    stageMin         = -34;     // stage x range (pixels)
@@ -115,6 +120,11 @@ class Choreographer {
   void reset(Mood mood, uint32_t now);
   void onEvent(const MusicEvent& e, Mood mood, uint32_t now);
   void onMoodChange(MoodChange change, Mood mood, uint32_t now);
+  // The pulse (core/beat.h): each beat as it falls, and where we are between
+  // beats over the groove's span (0..1). Dance moves land on beats; the groove
+  // loops in time with them.
+  void onBeat(uint32_t beat, Mood mood, uint32_t now);
+  void setBeatPhase(float phase) { beatPhase_ = phase; }
   void tick(Mood mood, float energy, uint32_t now);   // once per display frame
   void play(int move, uint32_t now);                  // start a move directly (tests, debug)
 
@@ -176,6 +186,8 @@ class Choreographer {
   float               stageX_ = 0;           // pixels; + is screen-right
   float               facing_ = 1;           // +1 beak to screen-left (as rendered), -1 mirrored
   Intent              intent_ = Intent::None;
+  float               beatPhase_ = 0, grooveWeight_ = 0;
+  int                 grooveMove_ = -1, phraseLeft_ = 0;
   float               gazeLook_ = 0, gazePitch_ = 0, gazeEyes_ = NAN, gazeWeight_ = 0;
 };
 

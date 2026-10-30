@@ -3,6 +3,7 @@
 // drift apart: music -> mood -> mind -> choreographer -> doll, plus the leaves
 // on the ground. It knows nothing about any particular character or scene:
 // those come in as packs (core/pack.h) and can be swapped at run time.
+#include "core/beat.h"
 #include "core/choreo.h"
 #include "core/crowd.h"
 #include "core/doll.h"
@@ -34,6 +35,7 @@ class DollPet {
     leaves.clear();
     if (scene_ && scene_->leafColours) leaves.scatter(rng_, leafCount, scene_->leafColours);
     crowd.reset(scene_ ? scene_->crowdCount : 0, now);
+    beat.reset(now, 560);
     composeDoll(char_->doll, choreo.pose(), parts);
     markCount = 0;
     handsSeen_ = false;
@@ -42,7 +44,8 @@ class DollPet {
   // A music event (10 ms logic tick). The Mind may hold a sudden hit back for
   // a double-take; it comes out of tick() a moment later.
   void event(const MusicEvent& e, uint32_t now) {
-    crowd.onEvent(e, now);
+    if (e.type == EventType::Pick || e.type == EventType::BigHit) beat.onOnset(now);
+    else crowd.onEvent(e, now);                    // (the crowd bobs on the beat, below)
     bond.onEvent(e, now);
     MoodChange c = mood.onEvent(e, now);
     if (c == MoodChange::Woke) {                    // waking eats the event
@@ -55,6 +58,12 @@ class DollPet {
 
   void tick(const Features& f, uint32_t now) {
     bond.tick(mood.mood(), now);
+    const MoodStyle& style = char_->choreo.moods[(int)mood.mood()];
+    if (style.beatMs) beat.setTempo(style.beatMs);   // its own tempo when nobody's keeping one
+    if (beat.tick(now)) {                          // a beat: dance moves land on it, the crowd bobs
+      choreo.onBeat(beat.beat(), mood.mood(), now);
+      crowd.onEvent({EventType::Pick, now, 1.0f}, now);
+    }
     MusicEvent held;
     if (mind.takeHeld(now, held)) choreo.onEvent(held, mood.mood(), now);
     MoodChange c = mood.tick(f, now);
@@ -79,6 +88,9 @@ class DollPet {
     const Gaze& g = mind.gaze();
     choreo.setGaze(g.look, g.pitch, g.eyes, g.weight);
 
+    const MoodStyle& style = ch.choreo.moods[(int)mood.mood()];
+    int span = style.grooveBeats ? style.grooveBeats : 1;   // where we are in the groove's bar
+    choreo.setBeatPhase(((beat.beat() % span) + beat.phase(now)) / span);
     choreo.tick(mood.mood(), mood.energy(), now);
     composeDoll(ch.doll, choreo.pose(), parts);
     markCount = placeMarks(ch.choreo, choreo, ch.doll, parts, marks);
@@ -119,6 +131,7 @@ class DollPet {
   Mind            mind;
   Choreographer   choreo;
   Crowd           crowd;
+  BeatClock       beat;           // the pulse it dances to
   Bond            bond;           // its memory of you: load it at start, save it when it asks (it survives reset())
   LeafField       leaves;
   PetMotionSensor motion;

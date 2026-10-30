@@ -47,7 +47,7 @@ struct MindConfig {
   uint32_t greetMs        = 2500;   // waking to someone it knows: hello for this long
   uint32_t shyMs          = 6000;   // ... to a stranger: a glance, then it keeps its eyes to itself
   float    friendAt       = 0.5f, strangerBelow = 0.15f;
-  float    performWeight  = 0.6f;   // gaze weight while dancing (the moves still show)
+  float    performWeight  = 0.35f;  // gaze weight while dancing (light: the nods and sways show)
 };
 
 constexpr int MIND_MAX_SIGHTINGS = 16;

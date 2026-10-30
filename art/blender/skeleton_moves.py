@@ -144,6 +144,28 @@ move("sigh", 50, squash=[(0, 0), (12, -1), (20, -1), (30, 1), (44, 0.5), (50, 0)
 move("breathe", 60, lean=[(0, 0), (30, 3), (60, 0)], pitch=[(0, 0), (30, 4), (60, 0)], jaw=[(0, 0), (30, 4), (60, 0)])
 move("twitch", 14, jaw=[(0, 0), (3, 12), (7, 0), (14, 0)], **arms(l={"elbow": [(0, 0), (4, -20), (14, 0)]}))
 
+# --- the groove: a bar of two beats, looped in time with the music ------------------
+# Sampled by the beat clock's phase (0 = on the beat), so frame counts are just
+# resolution (16 per beat). A bounce, not a wave: knees dip just after each
+# beat and ease back up; the head nods a couple of frames behind; the head
+# sways and the arms swing across the bar.
+def bounce(depth, at=3, back=11, frames=32, beats=2):
+    """A dip on every beat of the bar: down by `at` frames into the beat, eased back up by `back`."""
+    per = frames // beats
+    keys = [(0, 0)]
+    for b in range(beats):
+        keys += [(b * per + at, depth), (b * per + back, depth * 0.08), ((b + 1) * per, 0)]
+    return keys
+
+
+move("groove", 32, legs=bounce(0.8), squash=bounce(0.55), pitch=bounce(14, 5, 13), jaw=bounce(8, 4, 10),
+     look=[(0, 0), (8, 10), (16, 0), (24, -10), (32, 0)],
+     **arms(r={"arm": [(0, 0), (8, 14), (16, 0), (24, -6), (32, 0)], "elbow": bounce(10, 4, 12)},
+            l={"arm": [(0, 0), (8, 6), (16, 0), (24, -14), (32, 0)], "elbow": bounce(-10, 4, 12)}))
+move("groove_hyped", 32, legs=bounce(0.9), squash=bounce(0.7), pitch=bounce(22, 4, 12), lean=bounce(7, 4, 12),
+     jaw=bounce(14, 4, 11), look=[(0, 0), (8, 8), (16, 0), (24, -8), (32, 0)],
+     **arms(r={"arm": bounce(18, 4, 12), "elbow": bounce(25, 4, 12)}, l={"arm": bounce(-18, 4, 12), "elbow": bounce(-25, 4, 12)}))
+
 # --- groove: beat moves --------------------------------------------------------
 move("nod", 14, pitch=[(0, 0), (4, 16), (9, -4), (14, 0)], jaw=[(0, 0), (4, 10), (9, 0), (14, 0)],
      squash=[(0, 0), (4, 0.5), (14, 0)])
@@ -252,15 +274,16 @@ VOCAB = {
                 ("double_blink", 1, "idle"), ("chatter", 1, "idle"), ("scratch", 2, "idle"), ("hop_small", 2, "idle"),
                 ("walk", 6, "idle"), ("walk_long", 4, "idle"), ("step", 2, "idle"), ("turn_round", 4, "idle"),
                 ("inspect", 2, "idle"), ("sweep", 1, "idle")],
-    "IntoIt":  [("nod", 4, "beat"), ("bob", 3, "beat"), ("side_nod", 2, "beat"), ("snap", 3, "beat"), ("strum", 4, "beat"),
-                ("fist_pump", 2, "beat"), ("shimmy", 2, "beat"), ("hop_beat", 1, "beat"), ("strut", 4, "beat"),
+    "IntoIt":  [("snap", 3, "beat"), ("strum", 4, "beat"), ("fist_pump", 2, "beat"), ("shimmy", 2, "beat"),
+                ("hop_beat", 1, "beat"), ("strut", 3, "beat"), ("side_nod", 1, "beat"),
                 ("blink", 3, "idle"), ("chatter", 1, "idle"), ("turn_round", 1, "idle")],
     "Hyped":   [("shred", 5, "beat"), ("windmill", 4, "beat"), ("headbang", 3, "beat"), ("cheer_jump", 3, "beat"),
                 ("pogo", 2, "beat"), ("fist_pump", 2, "beat"), ("hop_travel", 1, "beat"), ("turn_hop", 1, "beat"),
                 ("blink", 1, "idle")],
 }
 IDLE_GAPS = {"Asleep": (1800, 4500), "Curious": (500, 1600), "IntoIt": (1200, 3000), "Hyped": (1200, 3000)}
-BEAT_MS = {"Asleep": 0, "Curious": 0, "IntoIt": 560, "Hyped": 600}
+BEAT_MS = {"Asleep": 0, "Curious": 0, "IntoIt": 560, "Hyped": 500}
+GROOVES = {"IntoIt": ("groove", 2), "Hyped": ("groove_hyped", 2)}   # (move, beats it spans)
 
 INTENTS = {
     "Watch":       {"vocab": [("shade_eyes", 3), ("blink", 2), ("tilt", 1)], "gap": (700, 1600)},

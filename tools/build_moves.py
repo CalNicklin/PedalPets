@@ -115,7 +115,11 @@ def build(mod, channels):
         for ch, v in mod.STANCES.get(mood, {}).items():
             stance[channels.index(ch)] = int(round(v * 4))
         gap = mod.IDLE_GAPS.get(mood, (60000, 60000))
-        styles.append((stance, first, len(vocab) - first, gap[0], gap[1], mod.BEAT_MS.get(mood, 0)))
+        groove, beats = getattr(mod, "GROOVES", {}).get(mood, (None, 0))
+        if groove is not None and groove not in names:
+            raise MovesError(f"groove {mood}: unknown move {groove!r}")
+        styles.append((stance, first, len(vocab) - first, gap[0], gap[1], mod.BEAT_MS.get(mood, 0),
+                       0 if groove is None else names.index(groove) + 1, beats))
 
     intents = []
     for intent in INTENTS:
@@ -211,8 +215,8 @@ def emit(t, marks, anchor, ns):
                + ", ".join(f"{{Trigger::{tr}, {f}, {n}}}" for tr, f, n in t["reactions"]) + "};")
     out += ["", "static const Choreography CHOREO = {",
             f"  MOVES, {len(t['moves'])}, MOVE_TRACKS, MOVE_SAMPLES,", "  {"]
-    for stance, first, count, gmin, gmax, beat in t["styles"]:
-        out.append(f"    {{{{{', '.join(map(str, stance))}}}, {first}, {count}, {gmin}, {gmax}, {beat}}},")
+    for stance, first, count, gmin, gmax, beat, groove, beats in t["styles"]:
+        out.append(f"    {{{{{', '.join(map(str, stance))}}}, {first}, {count}, {gmin}, {gmax}, {beat}, {groove}, {beats}}},")
     ch = t["channels"]
     def idx(name):
         return ch.index(name) if name in ch else -1
