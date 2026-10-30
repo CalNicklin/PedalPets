@@ -5,30 +5,36 @@
 # ///
 """Turn flat-colour Blender renders into palette "ink" frames.
 
-Usage:  uv run tools/ink.py <raw_dir> <out_dir> [--ss 2]
+Usage:  uv run tools/ink.py <raw_dir> <out_dir> --palette <actions.json> [--ss 2]
 
 Each raw RGBA render (supersampled) is snapped to the material colours,
 downsampled by majority vote, then given 1 px ink lines: around the
 silhouette and wherever two non-ink colours meet. Output PNGs use exactly the
-palette below plus transparency.
+character's palette (from actions.json; "ink" is the line colour) plus
+transparency.
 """
 
 import argparse
+import json
 from collections import Counter
 from pathlib import Path
 
 from PIL import Image
 
-# Material colours as rendered by art/blender/pet.py -> output palette colour.
-PALETTE = {
-    "ink":   ((5, 5, 5),       (24, 22, 22)),
-    "skin":  ((179, 179, 179), (150, 146, 140)),
-    "red":   ((231, 15, 15),   (200, 32, 32)),
-    "white": ((255, 255, 255), (250, 248, 242)),
-}
-NAMES = list(PALETTE)
-INK = NAMES.index("ink")
+# name -> (rendered sRGB, output RGB); filled from actions.json.
+PALETTE = {}
+NAMES = []
+INK = 0
 CLEAR = -1
+
+
+def load_palette(path):
+    global NAMES, INK
+    for c in json.loads(Path(path).read_text())["palette"]:
+        out = c["out"].lstrip("#")
+        PALETTE[c["name"]] = (tuple(c["render"]), tuple(int(out[i:i + 2], 16) for i in (0, 2, 4)))
+    NAMES = list(PALETTE)
+    INK = NAMES.index("ink")
 
 
 def classify(px):
@@ -80,9 +86,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("raw_dir")
     ap.add_argument("out_dir")
+    ap.add_argument("--palette", required=True, help="actions.json written by the Blender script")
     ap.add_argument("--ss", type=int, default=2)
     ap.add_argument("--sheet", help="also write a contact sheet of the inked frames here")
     a = ap.parse_args()
+    load_palette(a.palette)
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     files = sorted(Path(a.raw_dir).glob("*.png"))
