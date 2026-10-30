@@ -1,0 +1,128 @@
+#include <math.h>
+#include <string.h>
+#include <unity.h>
+#include "core/mind.h"
+
+void setUp() {}
+void tearDown() {}
+
+static Rng rng(1);
+static Mind* mind = nullptr;
+static uint32_t t;
+static Body body = {80, 70, 1, 0};   // head at screen (80, 70), beak to screen-left
+
+static void fresh() {
+  delete mind;
+  rng = Rng(1);
+  mind = new Mind(rng);
+  t = 0;
+  mind->reset(t);
+}
+static void run(Mood m, int frames, const Sighting* s = nullptr, int n = 0) {
+  for (int i = 0; i < frames; i++) { t += 30; mind->tick(m, body, s, n, t); }
+}
+static bool send(EventType e, Mood m, float strength = 1.0f) { return mind->onEvent({e, t, strength}, m, t); }
+static void playFor(Mood m, int seconds) {
+  for (int i = 0; i < seconds * 4; i++) { send(EventType::Pick, m, 0.6f); run(m, 8); }
+}
+
+void test_loud_hit_after_quiet_gets_a_double_take() {
+  fresh();
+  run(Mood::Curious, 120);                                  // 3.6 s of quiet
+  TEST_ASSERT_FALSE(send(EventType::BigHit, Mood::Curious));  // held back
+  run(Mood::Curious, 1);
+  TEST_ASSERT_EQUAL_FLOAT(45, mind->gaze().look);           // snaps round to you, eyes wide
+  TEST_ASSERT_EQUAL_FLOAT(-1, mind->gaze().eyes);
+  TEST_ASSERT_EQUAL_FLOAT(1, mind->gaze().weight);
+  MusicEvent e;
+  TEST_ASSERT_FALSE(mind->takeHeld(t, e));
+  run(Mood::Curious, 6);                                    // ~0.2 s later the reaction goes
+  TEST_ASSERT_TRUE(mind->takeHeld(t, e));
+  TEST_ASSERT_EQUAL(EventType::BigHit, e.type);
+}
+
+void test_hit_while_playing_goes_straight_through() {
+  fresh();
+  playFor(Mood::IntoIt, 2);
+  TEST_ASSERT_TRUE(send(EventType::BigHit, Mood::IntoIt));
+}
+
+void test_silence_gets_boring() {
+  fresh();
+  run(Mood::Curious, 30 * 33);                              // 30 s, nobody playing
+  TEST_ASSERT_EQUAL(Intent::Bored, mind->intent());
+  TEST_ASSERT_NOT_NULL(strstr(mind->thought(), "bored"));
+  playFor(Mood::Curious, 2);
+  TEST_ASSERT_TRUE(mind->intent() != Intent::Bored);
+}
+
+void test_stopping_playing_makes_it_want_you() {
+  fresh();
+  playFor(Mood::IntoIt, 8);
+  run(Mood::Curious, 8 * 33);                               // you stopped 8 s ago
+  TEST_ASSERT_EQUAL(Intent::WantsYou, mind->intent());
+  TEST_ASSERT_EQUAL(Focus::You, mind->focus());
+  TEST_ASSERT_EQUAL_FLOAT(45, mind->gaze().look);
+}
+
+void test_a_flying_leaf_is_watched_and_tracked() {
+  fresh();
+  run(Mood::Curious, 10);
+  Sighting leaf = {60, 100, -1.5f, 0.5f, false};            // in front, below the head
+  run(Mood::Curious, 2, &leaf, 1);
+  TEST_ASSERT_EQUAL(Focus::Leaf, mind->focus());
+  TEST_ASSERT_EQUAL(Intent::Watch, mind->intent());
+  TEST_ASSERT_TRUE(mind->gaze().pitch > 20);                // looks down at it
+  TEST_ASSERT_EQUAL_FLOAT(0, mind->gaze().look);
+}
+
+void test_a_leaf_landing_gets_investigated() {
+  fresh();
+  Sighting leaf = {60, 100, -1.5f, 0.5f, false};
+  run(Mood::Curious, 20, &leaf, 1);
+  leaf.vx = leaf.vy = 0;
+  leaf.resting = true;
+  run(Mood::Curious, 2, &leaf, 1);
+  TEST_ASSERT_EQUAL(Intent::Investigate, mind->intent());
+  TEST_ASSERT_EQUAL(Focus::Spot, mind->focus());
+}
+
+void test_something_behind_makes_it_turn_round() {
+  fresh();
+  Sighting leaf = {120, 90, 1.0f, 0.3f, false};             // behind (beak faces left)
+  run(Mood::Curious, 3, &leaf, 1);
+  TEST_ASSERT_FALSE(mind->takeTurn());
+  run(Mood::Curious, 20, &leaf, 1);
+  TEST_ASSERT_TRUE(mind->takeTurn());
+  TEST_ASSERT_FALSE(mind->takeTurn());                      // once
+}
+
+void test_asleep_has_no_intent_or_gaze() {
+  fresh();
+  Sighting leaf = {60, 100, -1.5f, 0.5f, false};
+  run(Mood::Asleep, 30, &leaf, 1);
+  TEST_ASSERT_EQUAL(Intent::None, mind->intent());
+  TEST_ASSERT_EQUAL_FLOAT(0, mind->gaze().weight);
+}
+
+void test_playing_hard_it_performs_to_you() {
+  fresh();
+  playFor(Mood::Hyped, 3);
+  TEST_ASSERT_EQUAL(Intent::None, mind->intent());
+  TEST_ASSERT_EQUAL(Focus::You, mind->focus());
+  TEST_ASSERT_TRUE(mind->gaze().weight < 1);                // the dance still shows
+}
+
+int main() {
+  UNITY_BEGIN();
+  RUN_TEST(test_loud_hit_after_quiet_gets_a_double_take);
+  RUN_TEST(test_hit_while_playing_goes_straight_through);
+  RUN_TEST(test_silence_gets_boring);
+  RUN_TEST(test_stopping_playing_makes_it_want_you);
+  RUN_TEST(test_a_flying_leaf_is_watched_and_tracked);
+  RUN_TEST(test_a_leaf_landing_gets_investigated);
+  RUN_TEST(test_something_behind_makes_it_turn_round);
+  RUN_TEST(test_asleep_has_no_intent_or_gaze);
+  RUN_TEST(test_playing_hard_it_performs_to_you);
+  return UNITY_END();
+}

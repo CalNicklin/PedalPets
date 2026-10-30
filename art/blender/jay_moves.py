@@ -224,6 +224,19 @@ VOCAB = {
 IDLE_GAPS = {"Asleep": (1800, 4500), "Curious": (500, 1600), "IntoIt": (1200, 3000), "Hyped": (1200, 3000)}
 BEAT_MS = {"Asleep": 0, "Curious": 0, "IntoIt": 560, "Hyped": 480}
 
+# What he does when the Mind wants something (idle vocabularies; see
+# docs/superpowers/specs/2026-10-30-inner-life-design.md). Gaze is the Mind's:
+# these are what the body does meanwhile.
+INTENTS = {
+    "Watch":       {"vocab": [("blink", 3), ("tail_flick", 2), ("crest_flick", 1)], "gap": (900, 2000)},
+    "Bored":       {"vocab": [("peck", 4), ("preen", 3), ("tail_flick", 2), ("shake", 1), ("hop_fwd", 2),
+                              ("hop_small", 1), ("double_blink", 1), ("yawn", 1)], "gap": (900, 2200)},
+    "WantsYou":    {"vocab": [("hop_small", 3), ("crest_flick", 3), ("tail_flick", 2), ("wing_flick", 2),
+                              ("hop_fwd", 1)], "gap": (600, 1400)},
+    "Investigate": {"vocab": [("hop_fwd", 4), ("peck", 3), ("hop_small", 1)], "gap": (300, 800)},
+}
+TURN_MOVE = "turn_round"
+
 REACTIONS = {
     "BigHit": ["startle"], "Flurry": ["flutter"], "Sustain": ["sing"], "Swell": ["launch"], "Cut": ["point"],
     "Wake": ["wake"], "DriftOff": ["yawn"],

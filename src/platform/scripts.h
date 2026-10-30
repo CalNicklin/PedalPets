@@ -7,8 +7,9 @@
 struct ScriptEntry { uint32_t t_ms; char key; uint16_t repeat; uint16_t every_ms; };
 struct Script      { const ScriptEntry* entries; uint8_t count; };
 
-// 1: a ~60 s "set". Ends in silence; the pet then winds down to sleep
-// (Hyped → IntoIt → Curious → Asleep takes ~20 s more).
+// 1: a ~60 s "set", a quiet spell (it misses you, gets bored), a sudden hit
+// out of nowhere (double-take), a little more playing, then silence until it
+// winds down to sleep (~30 s after it calms to Curious).
 static const ScriptEntry SCRIPT_SET[] = {
   {    0, '0',  1,    0 },  // silence
   { 3000, 'p',  1,    0 },  // first note wakes it
@@ -28,7 +29,10 @@ static const ScriptEntry SCRIPT_SET[] = {
   {39000, 'W',  1,    0 },  // swell peak
   {39500, '-',  6, 1000 },  // fade out
   {39500, 'p', 10,  800 },
-  {48000, '0',  1,    0 },  // silence
+  {48000, '0',  1,    0 },  // silence: misses you, then gets bored
+  {72000, 'h',  1,    0 },  // out of nowhere: double-take, then the startle
+  {73000, 'p',  6,  400 },
+  {76000, '0',  1,    0 },  // silence until it sleeps
 };
 
 // 2: priority drill — hit, cut, flurry, hit-during-flurry.

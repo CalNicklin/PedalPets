@@ -13,7 +13,7 @@ struct MoodConfig {
   float    hypedUp     = 0.70f, hypedDown  = 0.55f;
   uint32_t dwellMs     = 2000;    // threshold-driven transitions only
   float    noiseFloor  = 0.03f;
-  uint32_t silenceMs   = 10000;   // Curious → Asleep
+  uint32_t silenceMs   = 30000;   // Curious → Asleep (time to miss you, then get bored)
 };
 
 enum class MoodChange : uint8_t { None, Changed, Woke, FellAsleep };

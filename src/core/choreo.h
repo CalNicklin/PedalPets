@@ -1,7 +1,9 @@
 #pragma once
+#include <math.h>
 #include <stdint.h>
 #include "art_tables.h"
 #include "doll.h"
+#include "intent.h"
 #include "mood.h"
 #include "music_event.h"
 #include "rng.h"
@@ -47,6 +49,9 @@ struct MoodStyle {
 
 struct ReactionMoves { Trigger trigger; uint8_t first; uint8_t count; };  // into reactionMoveIds
 
+// An intent's idle vocabulary (into vocab); vocabCount 0 = keep the mood's.
+struct IntentStyle { uint16_t firstVocab; uint8_t vocabCount; uint16_t idleGapMin, idleGapMax; };
+
 struct Choreography {
   const Move*          moves;
   uint8_t              moveCount;
@@ -68,6 +73,10 @@ struct Choreography {
   uint8_t              markCount;
   const MarkSize*      markSizes;       // per mark image
   int8_t               markAnchorPart;  // doll part the marks hover by (the head)
+  IntentStyle          intents[INTENT_COUNT];
+  // Head channels the Mind's gaze steers, and the move it turns round with (-1 = none).
+  int8_t               lookChannel, pitchChannel, eyesChannel;
+  int8_t               turnMove;
 };
 
 struct ChoreoConfig {
@@ -101,6 +110,13 @@ class Choreographer {
   void tick(Mood mood, float energy, uint32_t now);   // once per display frame
   void play(int move, uint32_t now);                  // start a move directly (tests, debug)
 
+  // From the Mind: what it wants (idle vocabulary), where it's looking, and
+  // turning round to face something. Gaze: look replaces the moves' look,
+  // pitch adds to theirs, eyes (NAN = leave) override; all by weight 0..1.
+  void setIntent(Intent i);
+  void setGaze(float look, float pitch, float eyes, float weight);
+  bool requestTurn(uint32_t now);                     // false if it can't turn now
+
   const DollPose& pose() const { return pose_; }
   int  reaction() const;                     // move id of the active reaction, or -1
   int  activeCount() const;
@@ -121,6 +137,8 @@ class Choreographer {
   void startIdle(Mood mood, uint32_t now);
   void startBeat(Mood mood, uint32_t now);
   int  pickVocab(Mood mood, MoveKind kind);
+  int  pickFrom(uint16_t first, uint8_t count, MoveKind kind, int last);
+  const IntentStyle* intentStyle(Mood mood) const;
   Slot* add(int move, uint32_t now, float weight, float target);
   Slot* reactionSlot();
   void advance(Slot& s, uint32_t now);
@@ -148,6 +166,8 @@ class Choreographer {
   LiveMark            marks_[CHOREO_MAX_MARKS];
   float               stageX_ = 0;           // pixels; + is screen-right
   float               facing_ = 1;           // +1 beak to screen-left (as rendered), -1 mirrored
+  Intent              intent_ = Intent::None;
+  float               gazeLook_ = 0, gazePitch_ = 0, gazeEyes_ = NAN, gazeWeight_ = 0;
 };
 
 // Screen positions for the live marks, hovering by the anchor part.

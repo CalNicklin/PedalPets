@@ -19,6 +19,7 @@ from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "src" / "gen"
 MOODS = ["Asleep", "Curious", "IntoIt", "Hyped"]
+INTENTS = ["None", "Watch", "Bored", "WantsYou", "Investigate"]   # core/intent.h order
 TRIGGERS = ["DriftOff", "Sustain", "Swell", "Flurry", "Cut", "BigHit", "Wake"]
 EVENTS = ["Pick", "BigHit", "Flurry", "SustainStart", "SustainEnd", "SwellStart", "SwellPeak", "Cut"]
 
@@ -112,6 +113,21 @@ def build(mod, channels):
         gap = mod.IDLE_GAPS.get(mood, (60000, 60000))
         styles.append((stance, first, len(vocab) - first, gap[0], gap[1], mod.BEAT_MS.get(mood, 0)))
 
+    intents = []
+    for intent in INTENTS:
+        spec = getattr(mod, "INTENTS", {}).get(intent)
+        first = len(vocab)
+        if spec:
+            for mv, weight in spec["vocab"]:
+                if mv not in names:
+                    raise MovesError(f"intent {intent}: unknown move {mv!r}")
+                vocab.append((names.index(mv), weight, "Idle"))
+        gap = spec["gap"] if spec else (0, 0)
+        intents.append((first, len(vocab) - first, gap[0], gap[1]))
+    turn = getattr(mod, "TURN_MOVE", None)
+    if turn is not None and turn not in names:
+        raise MovesError(f"unknown TURN_MOVE {turn!r}")
+
     reactions, ids = [], []
     for trig, mvs in mod.REACTIONS.items():
         if trig not in TRIGGERS:
@@ -119,6 +135,7 @@ def build(mod, channels):
         reactions.append((trig, len(ids), len(mvs)))
         ids += [names.index(m) for m in mvs]
     return {"moves": moves, "tracks": tracks, "samples": samples, "vocab": vocab, "styles": styles,
+            "intents": intents, "turn": -1 if turn is None else names.index(turn),
             "reactions": reactions, "ids": ids, "channels": channels}
 
 
@@ -188,10 +205,14 @@ def emit(t, marks, anchor):
     for stance, first, count, gmin, gmax, beat in t["styles"]:
         out.append(f"    {{{{{', '.join(map(str, stance))}}}, {first}, {count}, {gmin}, {gmax}, {beat}}},")
     ch = t["channels"]
+    def idx(name):
+        return ch.index(name) if name in ch else -1
     xi = ch.index("x") if "x" in ch else -1
     fi = ch.index("face") if "face" in ch else -1
     out += ["  },", f"  VOCAB, REACTIONS, {len(t['reactions'])}, REACTION_MOVE_IDS, {len(ch)}, {xi}, {fi},",
             f"  MARK_ANIMS, MARK_FRAMES, {len(marks['anims'])}, MARK_SIZES, {anchor},",
+            "  {" + ", ".join(f"{{{f}, {n}, {a}, {b}}}" for f, n, a, b in t["intents"]) + "},",
+            f"  {idx('look')}, {idx('pitch')}, {idx('eyes')}, {t['turn']},",
             "};", "", "}  // namespace doll_gen", ""]
     return "\n".join(out)
 

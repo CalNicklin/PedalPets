@@ -16,6 +16,8 @@ void Choreographer::reset(Mood mood, uint32_t now) {
   if (c_.xChannel >= 0) pose_.ch[c_.xChannel] = stageX_;
   if (c_.faceChannel >= 0) pose_.ch[c_.faceChannel] = facing_;
   reactionTrigger_ = Trigger::None;
+  intent_ = Intent::None;
+  gazeWeight_ = 0;
   seen_ = 0;
   frozenUntil_ = now;
   lastPick_ = lastBeat_ = now;
@@ -112,6 +114,24 @@ bool Choreographer::allowed(int move) const {
 
 void Choreographer::play(int move, uint32_t now) { add(move, now, 1.0f, 1.0f); }
 
+void Choreographer::setIntent(Intent i) { intent_ = i; }
+
+void Choreographer::setGaze(float look, float pitch, float eyes, float weight) {
+  gazeLook_ = look;
+  gazePitch_ = pitch;
+  gazeEyes_ = eyes;
+  gazeWeight_ = fmaxf(0.0f, fminf(1.0f, weight));
+}
+
+bool Choreographer::requestTurn(uint32_t now) {
+  if (c_.turnMove < 0 || reactionSlot()) return false;
+  for (const Slot& s : slots_)
+    if (s.move >= 0 && turns(s.move) && s.target > 0) return false;   // already turning
+  add(c_.turnMove, now, 1.0f, 1.0f);
+  lastIdle_ = c_.turnMove;
+  return true;
+}
+
 Choreographer::Slot* Choreographer::add(int move, uint32_t now, float weight, float target) {
   Slot* slot = nullptr;
   for (Slot& s : slots_)
@@ -128,12 +148,15 @@ Choreographer::Slot* Choreographer::add(int move, uint32_t now, float weight, fl
   return slot;
 }
 
-// Weighted random choice of the mood's moves of this kind: never one that would
-// leave the stage, preferably not the last one, and turns favoured when heading
-// toward a nearby edge.
+// Weighted random choice of moves of this kind from a vocabulary: never one
+// that would leave the stage, preferably not the last one, and turns favoured
+// when heading toward a nearby edge.
 int Choreographer::pickVocab(Mood mood, MoveKind kind) {
   const MoodStyle& st = c_.moods[(int)mood];
-  int last = kind == MoveKind::Idle ? lastIdle_ : lastBeatMove_;
+  return pickFrom(st.firstVocab, st.vocabCount, kind, kind == MoveKind::Idle ? lastIdle_ : lastBeatMove_);
+}
+
+int Choreographer::pickFrom(uint16_t first, uint8_t count, MoveKind kind, int last) {
   float heading = -facing_;                       // screen direction of "forward"
   bool nearEdge = (heading < 0 && stageX_ < cfg_.stageMin + cfg_.edgeMargin) ||
                   (heading > 0 && stageX_ > cfg_.stageMax - cfg_.edgeMargin);
@@ -142,8 +165,8 @@ int Choreographer::pickVocab(Mood mood, MoveKind kind) {
     return v.weight * (nearEdge && turns(v.move) ? cfg_.edgeTurnBoost : 1);
   };
   uint32_t total = 0, totalAll = 0;
-  for (int i = 0; i < st.vocabCount; i++) {
-    const VocabEntry& v = c_.vocab[st.firstVocab + i];
+  for (int i = 0; i < count; i++) {
+    const VocabEntry& v = c_.vocab[first + i];
     totalAll += weight(v);
     if (v.move != last) total += weight(v);
   }
@@ -151,8 +174,8 @@ int Choreographer::pickVocab(Mood mood, MoveKind kind) {
   if (!avoidLast) total = totalAll;
   if (total == 0) return -1;
   uint32_t k = rng_.range(0, total - 1);
-  for (int i = 0; i < st.vocabCount; i++) {
-    const VocabEntry& v = c_.vocab[st.firstVocab + i];
+  for (int i = 0; i < count; i++) {
+    const VocabEntry& v = c_.vocab[first + i];
     uint32_t w = weight(v);
     if (!w || (avoidLast && v.move == last)) continue;
     if (k < w) return v.move;
@@ -161,10 +184,18 @@ int Choreographer::pickVocab(Mood mood, MoveKind kind) {
   return -1;
 }
 
+// The intent's idle vocabulary, if it has one (never while asleep).
+const IntentStyle* Choreographer::intentStyle(Mood mood) const {
+  if (mood == Mood::Asleep || intent_ == Intent::None) return nullptr;
+  const IntentStyle& is = c_.intents[(int)intent_];
+  return is.vocabCount ? &is : nullptr;
+}
+
 void Choreographer::startIdle(Mood mood, uint32_t now) {
   const MoodStyle& st = c_.moods[(int)mood];
-  nextIdle_ = now + rng_.range(st.idleGapMin, st.idleGapMax);
-  int move = pickVocab(mood, MoveKind::Idle);
+  const IntentStyle* is = intentStyle(mood);
+  nextIdle_ = now + (is ? rng_.range(is->idleGapMin, is->idleGapMax) : rng_.range(st.idleGapMin, st.idleGapMax));
+  int move = is ? pickFrom(is->firstVocab, is->vocabCount, MoveKind::Idle, lastIdle_) : pickVocab(mood, MoveKind::Idle);
   if (move < 0) return;
   add(move, now, 1.0f, 1.0f);
   lastIdle_ = move;
@@ -323,6 +354,12 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
     for (const Slot& s : slots_)
       if (s.move >= 0) v += s.weight * (s.beat ? beatAmp : 1.0f) * sample(s, ch);
     pose_.ch[ch] = v;
+  }
+  if (gazeWeight_ > 0) {                          // the Mind's gaze over the moves
+    float w = gazeWeight_;
+    if (c_.lookChannel >= 0) pose_.ch[c_.lookChannel] += (gazeLook_ - pose_.ch[c_.lookChannel]) * w;
+    if (c_.pitchChannel >= 0) pose_.ch[c_.pitchChannel] += gazePitch_ * w;
+    if (c_.eyesChannel >= 0 && !isnan(gazeEyes_) && w >= 0.5f) pose_.ch[c_.eyesChannel] = gazeEyes_;
   }
 
   for (Slot& s : slots_)

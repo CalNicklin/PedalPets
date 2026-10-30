@@ -15,12 +15,7 @@
 #include "gen/pack.h"
 #include "platform/mock_input.h"
 #if PEDALPETS_DOLL
-#include "core/choreo.h"
-#include "core/doll.h"
-#include "core/mood.h"
-#include "core/leaves.h"
-#include "gen/doll_meta.h"
-#include "gen/doll_moves.h"
+#include "platform/doll_pet.h"
 #include "platform/doll_telemetry.h"
 #if __has_include("gen/scene.h")
 #define PEDALPETS_SIM_SCENE 1
@@ -64,18 +59,27 @@ int main(int argc, char** argv) {
   mock.reset();
   uint32_t tickCount = 0;
 #if PEDALPETS_DOLL
-  MoodModel     mood;
-  Choreographer choreo(doll_gen::CHOREO, rng);
-  DollPlacement out[doll_gen::PART_COUNT];
-  MarkPlacement marks[CHOREO_MAX_MARKS];
-  LeafField       leaves;
-  PetMotionSensor motion;
-  static char     line[1024];
-  mood.reset(0);
-  choreo.reset(mood.mood(), 0);
+  DollPet     pet(rng);
+  static char line[1024];
 #ifdef PEDALPETS_SIM_SCENE
-  leaves.scatter(rng, TELEMETRY_LEAVES, scene_gen::LEAF_COLOURS);
+  pet.reset(0, scene_gen::LEAF_COLOURS, TELEMETRY_LEAVES);
+  const LeafField* scene = &pet.leaves;
+  const float feetY = scene_gen::FEET_Y;
+#else
+  pet.reset(0, 0, 0);
+  const LeafField* scene = nullptr;
+  const float feetY = 0;
 #endif
+  auto leafSprite = [&](int i) {
+#ifdef PEDALPETS_SIM_SCENE
+    const Leaf& l = pet.leaves.leaf(i);
+    return (l.colour * scene_gen::LEAF_ROTATIONS + pet.leaves.rotation(i, scene_gen::LEAF_ROTATIONS)) * 2 +
+           (pet.leaves.edgeOn(i) ? 1 : 0);
+#else
+    (void)i;
+    return -1;
+#endif
+  };
   dollTelemetryHeader(line, sizeof(line), doll_gen::PART_COUNT);
   printf("%s\n", line);
 #else
@@ -92,46 +96,17 @@ int main(int argc, char** argv) {
     mock.tick(now);
     MusicEvent e;
 #if PEDALPETS_DOLL
-    while (mock.pop(now, e)) {
-      MoodChange c = mood.onEvent(e, now);
-      if (c == MoodChange::Woke) choreo.onMoodChange(c, mood.mood(), now);
-      else choreo.onEvent(e, mood.mood(), now);
-    }
-    MoodChange c = mood.tick(mock.features(now), now);
-    if (c != MoodChange::None) choreo.onMoodChange(c, mood.mood(), now);
+    while (mock.pop(now, e)) pet.event(e, now);
+    pet.tick(mock.features(now), now);
     if (++tickCount % TICKS_PER_FRAME == 0) {
-      choreo.tick(mood.mood(), mood.energy(), now);
-      composeDoll(doll_gen::DOLL, choreo.pose(), out);
-      int rx = choreo.reaction();
-      int nm = placeMarks(doll_gen::CHOREO, choreo, doll_gen::DOLL, out, marks);
-      const LeafField* scene = nullptr;
-      float feetY = 0;
-#ifdef PEDALPETS_SIM_SCENE
-      int fx, fy;
-      pivotOnCanvas(doll_gen::DOLL, out[0], &fx, &fy);
-      const DollPose& pose = choreo.pose();
-      PetMotion m = motion.update(pose.ch[doll_gen::CH_X], pose.ch[doll_gen::CH_HOP], pose.ch[doll_gen::CH_FLAPL],
-                                  (160 - doll_gen::CANVAS_W) / 2 + fx, 128 - doll_gen::CANVAS_H + fy);
-      leaves.step(rng, m);
-      scene = &leaves;
-      feetY = scene_gen::FEET_Y;
-#endif
-      auto leafSprite = [&](int i) {
-#ifdef PEDALPETS_SIM_SCENE
-        const Leaf& l = leaves.leaf(i);
-        return (l.colour * scene_gen::LEAF_ROTATIONS + leaves.rotation(i, scene_gen::LEAF_ROTATIONS)) * 2 +
-               (leaves.edgeOn(i) ? 1 : 0);
-#else
-        (void)i;
-        return -1;
-#endif
-      };
-      dollTelemetryRow(line, sizeof(line), now, (int)mood.mood(), mood.energy(),
-                       rx >= 0 ? doll_gen::MOVE_NAMES[rx] : nullptr, -1, out, doll_gen::PART_COUNT, marks, nm,
-                       scene, feetY, leafSprite);
+      pet.frame(now);
+      int rx = pet.choreo.reaction();
+      dollTelemetryRow(line, sizeof(line), now, (int)pet.mood.mood(), pet.mood.energy(),
+                       rx >= 0 ? doll_gen::MOVE_NAMES[rx] : nullptr, pet.mind.thought(), -1, pet.parts,
+                       doll_gen::PART_COUNT, pet.marks, pet.markCount, scene, feetY, leafSprite);
       printf("%s", line);
       if (getenv("PEDALPETS_CHANNELS")) {   // debug: raw channel values after the parts
-        for (int c = 0; c < doll_gen::CHANNEL_COUNT; c++) printf(",%s=%.1f", doll_gen::CHANNEL_NAMES[c], choreo.pose().ch[c]);
+        for (int c = 0; c < doll_gen::CHANNEL_COUNT; c++) printf(",%s=%.1f", doll_gen::CHANNEL_NAMES[c], pet.choreo.pose().ch[c]);
       }
       printf("\n");
     }

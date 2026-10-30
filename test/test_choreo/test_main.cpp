@@ -1,3 +1,4 @@
+#include <math.h>
 #include <unity.h>
 #include "core/choreo.h"
 
@@ -67,6 +68,9 @@ static Choreography make() {
   c.moods[(int)Mood::IntoIt].vocabCount = 1;
   c.moods[(int)Mood::IntoIt].idleGapMin = 60000;
   c.moods[(int)Mood::IntoIt].idleGapMax = 60000;
+  c.intents[(int)Intent::Bored] = {2, 1, 300, 300};     // bored: hop forward every 300 ms
+  c.lookChannel = 1; c.pitchChannel = 2; c.eyesChannel = -1;
+  c.turnMove = TURN;
   return c;
 }
 static Choreography CH = make();
@@ -141,6 +145,37 @@ void test_long_beat_move_plays_until_its_tail() {
   frames(Mood::IntoIt, 1);
   send(EventType::Pick, Mood::IntoIt);                    // at its tail: crossfade
   TEST_ASSERT_EQUAL_INT(2, ch->activeCount());
+}
+
+void test_intent_vocabulary_replaces_mood_idles() {
+  fresh(Mood::Curious);
+  ch->setIntent(Intent::Bored);
+  frames(Mood::Curious, 10);                              // 300 ms -> an idle starts
+  TEST_ASSERT_TRUE(ch->weightOf(HOP_FWD) > 0);
+  TEST_ASSERT_EQUAL_FLOAT(0, ch->weightOf(IDLE_A));
+  ch->setIntent(Intent::None);
+  frames(Mood::Curious, 20);
+  TEST_ASSERT_TRUE(ch->weightOf(IDLE_A) > 0);
+}
+
+void test_gaze_points_the_head() {
+  fresh(Mood::Curious);
+  ch->setGaze(8, 4, NAN, 1.0f);                           // look overrides, pitch adds
+  frames(Mood::Curious, 1);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 8, ch->pose().ch[1]);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 4, ch->pose().ch[2]);
+  ch->setGaze(8, 4, NAN, 0.5f);
+  frames(Mood::Curious, 1);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 4, ch->pose().ch[1]);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 2, ch->pose().ch[2]);
+}
+
+void test_requested_turn_plays_the_turn_move_once() {
+  fresh(Mood::Curious);
+  TEST_ASSERT_TRUE(ch->requestTurn(t));
+  TEST_ASSERT_FALSE(ch->requestTurn(t));                  // already turning
+  frames(Mood::Curious, 4);
+  TEST_ASSERT_EQUAL_FLOAT(-1, ch->pose().ch[4]);
 }
 
 void test_reaction_ducks_other_moves() {
@@ -255,6 +290,9 @@ int main(int, char**) {
   RUN_TEST(test_picks_start_beat_moves_only_when_grooving);
   RUN_TEST(test_rapid_picks_wait_for_beat_move_to_progress);
   RUN_TEST(test_long_beat_move_plays_until_its_tail);
+  RUN_TEST(test_intent_vocabulary_replaces_mood_idles);
+  RUN_TEST(test_gaze_points_the_head);
+  RUN_TEST(test_requested_turn_plays_the_turn_move_once);
   RUN_TEST(test_reaction_ducks_other_moves);
   RUN_TEST(test_reaction_fades_in_not_cut);
   RUN_TEST(test_lower_priority_ignored_during_reaction);

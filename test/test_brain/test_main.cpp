@@ -106,7 +106,7 @@ void test_until_event_reaches_performer() {
 
 void test_drift_off_then_any_event_wakes() {
   wakeAndSettle();
-  for (uint32_t i = 0; i < 15000 && brain->mood() != Mood::Asleep; i += 10) run(0.0f, 10);
+  for (uint32_t i = 0; i < 40000 && brain->mood() != Mood::Asleep; i += 10) run(0.0f, 10);
   TEST_ASSERT_EQUAL_INT((int)Mood::Asleep, (int)brain->mood());
   TEST_ASSERT_EQUAL_INT(FX_DRIFTOFF, perf->reaction());
   send(EventType::Pick);

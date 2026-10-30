@@ -86,7 +86,7 @@ void test_wind_down_passes_through_each_mood() {
   ASSERT_MOOD(Mood::Hyped);
   Mood seen[8]; int n = 0;
   uint32_t curiousAt = 0, asleepAt = 0;
-  for (uint32_t i = 0; i < 60000 && m.mood() != Mood::Asleep; i += 10) {
+  for (uint32_t i = 0; i < 90000 && m.mood() != Mood::Asleep; i += 10) {
     t += 10;
     MoodChange c = m.tick({0.0f, 0}, t);
     if (c == MoodChange::None) continue;
@@ -98,7 +98,7 @@ void test_wind_down_passes_through_each_mood() {
   TEST_ASSERT_EQUAL_INT((int)Mood::IntoIt,  (int)seen[0]);
   TEST_ASSERT_EQUAL_INT((int)Mood::Curious, (int)seen[1]);
   TEST_ASSERT_EQUAL_INT((int)Mood::Asleep,  (int)seen[2]);
-  TEST_ASSERT_TRUE(asleepAt - curiousAt >= 10000 && asleepAt - curiousAt <= 10010);
+  TEST_ASSERT_TRUE(asleepAt - curiousAt >= 30000 && asleepAt - curiousAt <= 30010);
   TEST_ASSERT_EQUAL_FLOAT(0.0f, m.energy());
 }
 

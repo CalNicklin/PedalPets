@@ -10,7 +10,7 @@
 constexpr int TELEMETRY_LEAVES = 12;
 
 inline int dollTelemetryHeader(char* b, int n, int parts) {
-  int k = snprintf(b, n, "t_ms,mood,energy,reaction,frame_us,flip");
+  int k = snprintf(b, n, "t_ms,mood,energy,reaction,thought,frame_us,flip");
   for (int i = 0; i < parts; i++) k += snprintf(b + k, n - k, ",p%d_img,p%d_x,p%d_y", i, i, i);
   for (int i = 0; i < CHOREO_MAX_MARKS; i++) k += snprintf(b + k, n - k, ",m%d_img,m%d_x,m%d_y", i, i, i);
   for (int i = 0; i < TELEMETRY_LEAVES; i++) k += snprintf(b + k, n - k, ",l%d_s,l%d_x,l%d_y,l%d_f", i, i, i, i);
@@ -20,10 +20,11 @@ inline int dollTelemetryHeader(char* b, int n, int parts) {
 // leafSprite(i) -> sprite index (or -1 for no scene).
 template <typename LeafSprite>
 inline int dollTelemetryRow(char* b, int n, uint32_t t, int mood, float energy, const char* reaction,
-                            long frameUs, const DollPlacement* parts, int partCount,
+                            const char* thought, long frameUs, const DollPlacement* parts, int partCount,
                             const MarkPlacement* marks, int markCount, const LeafField* leaves,
                             float feetY, LeafSprite leafSprite) {
-  int k = snprintf(b, n, "%u,%d,%.3f,%s,", (unsigned)t, mood, energy, reaction ? reaction : "-");
+  int k = snprintf(b, n, "%u,%d,%.3f,%s,%s,", (unsigned)t, mood, energy, reaction ? reaction : "-",
+                   thought ? thought : "-");
   if (frameUs >= 0) k += snprintf(b + k, n - k, "%ld", frameUs);
   k += snprintf(b + k, n - k, ",%d", parts[0].flip ? 1 : 0);
   for (int i = 0; i < partCount; i++) k += snprintf(b + k, n - k, ",%u,%d,%d", parts[i].image, parts[i].x, parts[i].y);

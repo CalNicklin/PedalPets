@@ -63,7 +63,7 @@ static const Move MOVES[] = {
   {34, 5, 195, 0, 0, EventType::None, 0, 0, 0, 0, 0},  // yawn
 };
 static const char* const MOVE_NAMES[] = {"look_l", "look_r", "tilt", "blink", "double_blink", "crest_flick", "preen", "tail_flick", "hop_small", "hop_fwd", "hop_fwd2", "walk", "walk_long", "strut", "hop_beat", "turn_round", "shuffle", "peck", "look_you", "shake", "breathe", "twitch", "nod", "bob", "side_nod", "tail_pump", "wing_flick", "hop_flap", "headbang", "flap_burst", "hop_travel", "turn_hop", "frenzy_flight", "pogo", "rock", "startle", "flutter", "sing", "launch", "point", "wake", "yawn"};
-static const VocabEntry VOCAB[] = {{20, 6, MoveKind::Idle}, {21, 1, MoveKind::Idle}, {0, 3, MoveKind::Idle}, {1, 3, MoveKind::Idle}, {2, 2, MoveKind::Idle}, {3, 4, MoveKind::Idle}, {4, 1, MoveKind::Idle}, {5, 2, MoveKind::Idle}, {6, 1, MoveKind::Idle}, {7, 2, MoveKind::Idle}, {8, 3, MoveKind::Idle}, {9, 4, MoveKind::Idle}, {10, 3, MoveKind::Idle}, {15, 3, MoveKind::Idle}, {17, 2, MoveKind::Idle}, {18, 2, MoveKind::Idle}, {19, 1, MoveKind::Idle}, {22, 4, MoveKind::Beat}, {23, 3, MoveKind::Beat}, {24, 2, MoveKind::Beat}, {25, 2, MoveKind::Beat}, {26, 2, MoveKind::Beat}, {14, 3, MoveKind::Beat}, {9, 2, MoveKind::Beat}, {3, 3, MoveKind::Idle}, {5, 1, MoveKind::Idle}, {18, 1, MoveKind::Idle}, {19, 1, MoveKind::Idle}, {15, 1, MoveKind::Idle}, {32, 6, MoveKind::Beat}, {33, 4, MoveKind::Beat}, {27, 4, MoveKind::Beat}, {29, 1, MoveKind::Beat}, {28, 1, MoveKind::Beat}, {30, 1, MoveKind::Beat}, {31, 1, MoveKind::Beat}, {3, 1, MoveKind::Idle}};
+static const VocabEntry VOCAB[] = {{20, 6, MoveKind::Idle}, {21, 1, MoveKind::Idle}, {0, 3, MoveKind::Idle}, {1, 3, MoveKind::Idle}, {2, 2, MoveKind::Idle}, {3, 4, MoveKind::Idle}, {4, 1, MoveKind::Idle}, {5, 2, MoveKind::Idle}, {6, 1, MoveKind::Idle}, {7, 2, MoveKind::Idle}, {8, 3, MoveKind::Idle}, {9, 4, MoveKind::Idle}, {10, 3, MoveKind::Idle}, {15, 3, MoveKind::Idle}, {17, 2, MoveKind::Idle}, {18, 2, MoveKind::Idle}, {19, 1, MoveKind::Idle}, {22, 4, MoveKind::Beat}, {23, 3, MoveKind::Beat}, {24, 2, MoveKind::Beat}, {25, 2, MoveKind::Beat}, {26, 2, MoveKind::Beat}, {14, 3, MoveKind::Beat}, {9, 2, MoveKind::Beat}, {3, 3, MoveKind::Idle}, {5, 1, MoveKind::Idle}, {18, 1, MoveKind::Idle}, {19, 1, MoveKind::Idle}, {15, 1, MoveKind::Idle}, {32, 6, MoveKind::Beat}, {33, 4, MoveKind::Beat}, {27, 4, MoveKind::Beat}, {29, 1, MoveKind::Beat}, {28, 1, MoveKind::Beat}, {30, 1, MoveKind::Beat}, {31, 1, MoveKind::Beat}, {3, 1, MoveKind::Idle}, {3, 3, MoveKind::Idle}, {7, 2, MoveKind::Idle}, {5, 1, MoveKind::Idle}, {17, 4, MoveKind::Idle}, {6, 3, MoveKind::Idle}, {7, 2, MoveKind::Idle}, {19, 1, MoveKind::Idle}, {9, 2, MoveKind::Idle}, {8, 1, MoveKind::Idle}, {4, 1, MoveKind::Idle}, {41, 1, MoveKind::Idle}, {8, 3, MoveKind::Idle}, {5, 3, MoveKind::Idle}, {7, 2, MoveKind::Idle}, {26, 2, MoveKind::Idle}, {9, 1, MoveKind::Idle}, {9, 4, MoveKind::Idle}, {17, 3, MoveKind::Idle}, {8, 1, MoveKind::Idle}};
 static const uint8_t REACTION_MOVE_IDS[] = {35, 36, 37, 38, 39, 40, 41};
 static const ReactionMoves REACTIONS[] = {{Trigger::BigHit, 0, 1}, {Trigger::Flurry, 1, 1}, {Trigger::Sustain, 2, 1}, {Trigger::Swell, 3, 1}, {Trigger::Cut, 4, 1}, {Trigger::Wake, 5, 1}, {Trigger::DriftOff, 6, 1}};
 
@@ -77,6 +77,8 @@ static const Choreography CHOREO = {
   },
   VOCAB, REACTIONS, 7, REACTION_MOVE_IDS, 15, 12, 13,
   MARK_ANIMS, MARK_FRAMES, 5, MARK_SIZES, 2,
+  {{37, 0, 0, 0}, {37, 3, 900, 2000}, {40, 8, 900, 2200}, {48, 5, 600, 1400}, {53, 3, 300, 800}},
+  5, 4, 6, 15,
 };
 
 }  // namespace doll_gen

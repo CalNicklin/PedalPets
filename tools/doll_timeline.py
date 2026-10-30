@@ -96,6 +96,8 @@ def load(path):
     rows = []
     with open(path) as f:
         for r in csv.DictReader(f):
+            if None in r.values():
+                continue                 # a line cut short over serial
             n = sum(1 for k in r if k.startswith("p") and k.endswith("_img"))
             nm = sum(1 for k in r if k.startswith("m") and k.endswith("_img"))
             nl = sum(1 for k in r if k.startswith("l") and k.endswith("_s"))
