@@ -423,6 +423,38 @@ eyes = "baked"
 src  = "art/jay/poses/hyped_15.png"
 eyes = "baked"
 
+[poses.hyped_16]
+src  = "art/jay/poses/hyped_16.png"
+eyes = "baked"
+
+[poses.hyped_17]
+src  = "art/jay/poses/hyped_17.png"
+eyes = "baked"
+
+[poses.hyped_18]
+src  = "art/jay/poses/hyped_18.png"
+eyes = "baked"
+
+[poses.hyped_19]
+src  = "art/jay/poses/hyped_19.png"
+eyes = "baked"
+
+[poses.hyped_20]
+src  = "art/jay/poses/hyped_20.png"
+eyes = "baked"
+
+[poses.hyped_21]
+src  = "art/jay/poses/hyped_21.png"
+eyes = "baked"
+
+[poses.hyped_22]
+src  = "art/jay/poses/hyped_22.png"
+eyes = "baked"
+
+[poses.hyped_23]
+src  = "art/jay/poses/hyped_23.png"
+eyes = "baked"
+
 [poses.asleep_00]
 src  = "art/jay/poses/asleep_00.png"
 eyes = "baked"
@@ -1480,7 +1512,7 @@ poses  = ["groove_00", "groove_01", "groove_02", "groove_03", "groove_04", "groo
 period = 30
 
 [idles.Hyped]
-poses  = ["hyped_00", "hyped_01", "hyped_02", "hyped_03", "hyped_04", "hyped_05", "hyped_06", "hyped_07", "hyped_08", "hyped_09", "hyped_10", "hyped_11", "hyped_12", "hyped_13", "hyped_14", "hyped_15"]
+poses  = ["hyped_00", "hyped_01", "hyped_02", "hyped_03", "hyped_04", "hyped_05", "hyped_06", "hyped_07", "hyped_08", "hyped_09", "hyped_10", "hyped_11", "hyped_12", "hyped_13", "hyped_14", "hyped_15", "hyped_16", "hyped_17", "hyped_18", "hyped_19", "hyped_20", "hyped_21", "hyped_22", "hyped_23"]
 period = 30
 
 [idles.Asleep]

@@ -122,15 +122,29 @@ action("groove", 24, [
     (24, HUB),
 ], loop=True, idle="IntoIt")
 
-action("hyped", 16, [
-    (0, HUB),
-    (4, merge(HUB, P(root={"s": (1.08, 1, 0.88)}, hips={"r": (10, 0, 0)}, tail={"r": (-6, 0, 0)}),
-              wings(155), crest(-28), beak(10))),
-    (8, merge(HUB, P(hips={"l": (0, 0, 0.16)}, root={"s": (0.94, 1, 1.07)}, tail={"r": (6, 0, 0)}),
-              wings(35), crest(-34), beak(22))),
-    (12, merge(HUB, P(hips={"l": (0, 0, 0.02)}, root={"s": (1.05, 1, 0.93)}), wings(120), crest(-20))),
-    (16, HUB),
-], loop=True, idle="Hyped")
+def hyped_keys():
+    """Peak state: wings beat every 4 frames (~8 Hz), two big hops per loop,
+    body rocks forward/back with the head banging against it. Keys every 2
+    frames (alternate wing extremes); the spline fills the frames between."""
+    import math
+    keys = []
+    for k in range(0, 25, 2):
+        hop = math.sin(math.pi * (k % 12) / 12)          # 0 on the ground, 1 at the top
+        land = 1 - hop                                    # squash on landing
+        rock = math.sin(2 * math.pi * k / 24)
+        wing = 165 if (k // 2) % 2 else 25
+        pose = merge(HUB, P(
+            hips={"r": (14 * rock, 0, 0)},
+            root={"l": (0, 0, 0.3 * hop), "s": (1 + 0.09 * land, 1, 1 - 0.13 * land)},
+            head={"r": (-16 * rock + 10 * land, 0, 0)},
+            tail={"r": (-10 * rock, 0, 0)}),
+            wings(wing), crest(-40), beak(24 + 8 * hop))
+        keys.append((k, pose))
+    keys[-1] = (24, keys[0][1])                           # seamless loop
+    return keys
+
+
+action("hyped", 24, hyped_keys(), loop=True, idle="Hyped")
 
 action("asleep", 48, [
     (0, ASLEEP),
@@ -139,7 +153,7 @@ action("asleep", 48, [
 ], loop=True, idle="Asleep")
 
 # Reactions: start and end on HUB.
-STARTLED = merge(P(hips={"r": (-14, 0, 0), "l": (0, 0, 0.12)}, root={"s": (0.93, 1, 1.08)},
+STARTLED = merge(P(hips={"r": (-14, 0, 0)}, root={"l": (0, 0, 0.12), "s": (0.93, 1, 1.08)},
                    head={"r": (-14, 0, 0)}, tail={"r": (-20, 0, 0)}),
                  wings(150), crest(-40), beak(28), eyes(1.6, 1.2))
 action("big_hit", 31, [
@@ -151,9 +165,9 @@ action("big_hit", 31, [
     (30, HUB),
 ], trigger="BigHit", entry_window=4)
 
-FLAP_UP = merge(HUB, P(hips={"l": (0, 0, 0.06)}, root={"s": (0.97, 1, 1.03)}, tail={"r": (4, 0, 0)}),
+FLAP_UP = merge(HUB, P(root={"l": (0, 0, 0.06), "s": (0.97, 1, 1.03)}, tail={"r": (4, 0, 0)}),
                 wings(160), crest(-30), beak(14))
-FLAP_DOWN = merge(HUB, P(hips={"l": (0, 0, 0.0)}, root={"s": (1.05, 1, 0.94)}, tail={"r": (-5, 0, 0)}),
+FLAP_DOWN = merge(HUB, P(root={"l": (0, 0, 0.0), "s": (1.05, 1, 0.94)}, tail={"r": (-5, 0, 0)}),
                   wings(40), crest(-24), beak(20))
 action("flurry", 22, [
     (0, HUB), (3, FLAP_UP), (6, FLAP_DOWN), (9, FLAP_UP), (12, FLAP_DOWN), (15, FLAP_UP), (21, HUB),
@@ -177,10 +191,10 @@ action("swell", 39, [
     (12, CROUCH),
     (16, merge(CROUCH, P(root={"s": (1.12, 1, 0.83)}))),
     (20, CROUCH),
-    (24, merge(HUB, P(hips={"l": (0, 0, 0.42)}, root={"s": (0.9, 1, 1.12)}, tail={"r": (16, 0, 0)}),
+    (24, merge(HUB, P(root={"l": (0, 0, 0.42), "s": (0.9, 1, 1.12)}, tail={"r": (16, 0, 0)}),
                wings(160), crest(-40), beak(22), eyes(1.4))),
-    (28, merge(HUB, P(hips={"l": (0, 0, 0.5)}), wings(40), crest(-36), beak(18))),
-    (32, merge(HUB, P(hips={"l": (0, 0, -0.02)}, root={"s": (1.1, 1, 0.88)}), wings(70))),
+    (28, merge(HUB, P(root={"l": (0, 0, 0.5)}), wings(40), crest(-36), beak(18))),
+    (32, merge(HUB, P(root={"s": (1.1, 1, 0.88)}), wings(70))),
     (38, HUB),
 ], trigger="Swell", loop_from=12, loop_len=8, loop_until="SwellPeak", loop_max=5000,
    entry_window=6)
@@ -193,7 +207,7 @@ action("cut", 21, [
 
 action("wake", 29, [
     (0, ASLEEP),
-    (3, merge(HUB, P(hips={"l": (0, 0, 0.1)}, root={"s": (0.92, 1, 1.1)}), wings(60), crest(-40),
+    (3, merge(HUB, P(root={"l": (0, 0, 0.1), "s": (0.92, 1, 1.1)}), wings(60), crest(-40),
               eyes(1.6, 1.2), beak(14))),
     (8, merge(HUB, crest(-20), eyes(1.3, 1.1))),
     (13, merge(HUB, P(head={"r": (0, 0, 30)}), crest(-10))),
@@ -213,7 +227,7 @@ action("drift_off", 33, [
 # --- follow-through ------------------------------------------------------------
 
 def bounce(pose):
-    return pose["hips"]["l"][2] + 1.2 * (pose["root"]["s"][2] - 1)
+    return pose["root"]["l"][2] + pose["hips"]["l"][2] + 1.2 * (pose["root"]["s"][2] - 1)
 
 
 def secondary(act, f):
