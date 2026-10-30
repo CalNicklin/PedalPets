@@ -4,6 +4,7 @@
 #include "core/timing.h"
 #include "gen/packs.h"
 #include "platform/doll_pet.h"
+#include "platform/director_link.h"
 #include "platform/doll_telemetry.h"
 #include "platform/mock_input.h"
 #include "platform/renderer_tft.h"
@@ -22,6 +23,10 @@ uint32_t    nextTick = 0;       // fixed grid: logic every TICK_MS, render every
 uint32_t    tickCount = 0;
 char        line[1024];
 Preferences prefs;              // the pet's memory of you, in flash (NVS)
+DirectorLink director;
+bool        directing = false;  // summaries out, suggestions in (tools/director.py)
+char        inLine[96];         // a "#..." line coming in over serial
+int         inLen = -1;         // -1: not collecting a line
 
 void loadMemory() {
   PlayerMemory m;
@@ -52,6 +57,10 @@ void resetAll(uint32_t now) {
   pet.reset(now, TELEMETRY_LEAVES);
   Serial.printf("character: %s  scene: %s\n", pet.character().name, currentScene() ? currentScene()->name : "-");
   if (telemetry) sendHeader();
+  if (directing) {                                 // the director needs the new character's moves
+    director.moves(line, sizeof(line), pet.character());
+    Serial.println(line);
+  }
 }
 
 void frame(uint32_t t, uint32_t now) {
@@ -90,14 +99,32 @@ void setup() {
   loadMemory();
   resetAll(millis());
   Serial.println("PedalPets ready. Keys: p P h f s S w W c + - 0 | 1-4 scripts | n character | b scene | "
-                 "x forget me | d HUD | t telemetry | r reset");
+                 "x forget me | g director | d HUD | t telemetry | r reset");
 }
 
 namespace {
 // Act on each key as it arrives, so "n1" switches character *then* starts
 // script 1 (a reset after the script started would cancel it).
 void handleKey(char c, uint32_t now) {
+  if (inLen >= 0 || c == '#') {                    // a whole line from the director, not keys
+    if (c == '\n' || c == '\r') {
+      inLine[inLen < 0 ? 0 : inLen] = 0;
+      if (inLen > 0 && director.apply(inLine, pet, now)) Serial.printf("directed: %s\n", inLine);
+      inLen = -1;
+    } else if (inLen < (int)sizeof(inLine) - 1) {
+      inLine[inLen < 0 ? (inLen = 0) : inLen] = c;
+      inLen++;
+    }
+    return;
+  }
   mock.key(c, now);
+  if (mock.takeDirector()) {
+    directing = !directing;
+    if (directing) {
+      director.moves(line, sizeof(line), pet.character());
+      Serial.println(line);
+    }
+  }
   if (mock.takeNextCharacter()) {
     characterIndex = (characterIndex + 1) % CHARACTER_COUNT;
     resetAll(now);
@@ -131,8 +158,12 @@ void loop() {
 
   mock.tick(t);
   MusicEvent e;
-  while (mock.pop(t, e)) pet.event(e, t);
+  while (mock.pop(t, e)) {
+    director.onEvent(e, t);
+    pet.event(e, t);
+  }
   pet.tick(mock.features(t), t);
   if (++tickCount % TICKS_PER_FRAME == 0) frame(t, now);
   if (tickCount % 100 == 0) saveMemoryIfDue(t);   // checked once a second; saves rarely
+  if (directing && director.summary(line, sizeof(line), pet, t)) Serial.println(line);
 }

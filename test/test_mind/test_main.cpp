@@ -1,6 +1,7 @@
 #include <math.h>
 #include <string.h>
 #include <unity.h>
+#include "core/directive.h"
 #include "core/mind.h"
 
 void setUp() {}
@@ -181,6 +182,31 @@ void test_a_friend_misses_you_sooner() {
   TEST_ASSERT_TRUE(when[1] < when[0]);
 }
 
+void test_a_director_can_suggest_what_it_wants_and_thinks() {
+  fresh();
+  Directive d;
+  d.intent = Intent::Bored;
+  d.forMs = 3000;
+  d.lookAtYou = true;
+  strcpy(d.thought, "is that all you've got?");
+  mind->direct(d, t);
+  run(Mood::Curious, 2);
+  TEST_ASSERT_EQUAL(Intent::Bored, mind->intent());
+  TEST_ASSERT_EQUAL(Focus::You, mind->focus());
+  TEST_ASSERT_EQUAL_STRING("is that all you've got?", mind->thought());
+  run(Mood::Curious, 120);                                    // it wears off
+  TEST_ASSERT_TRUE(strcmp(mind->thought(), "is that all you've got?") != 0);
+}
+
+void test_the_music_comes_before_the_director() {
+  fresh();
+  Directive d;
+  d.intent = Intent::Bored;
+  mind->direct(d, t);
+  playFor(Mood::Hyped, 1);
+  TEST_ASSERT_EQUAL(Intent::None, mind->intent());           // it's dancing, not moping
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_loud_hit_after_quiet_gets_a_double_take);
@@ -197,5 +223,7 @@ int main() {
   RUN_TEST(test_an_old_friend_gets_a_warm_hello);
   RUN_TEST(test_a_stranger_gets_a_shy_glance);
   RUN_TEST(test_a_friend_misses_you_sooner);
+  RUN_TEST(test_a_director_can_suggest_what_it_wants_and_thinks);
+  RUN_TEST(test_the_music_comes_before_the_director);
   return UNITY_END();
 }

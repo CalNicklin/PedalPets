@@ -1,6 +1,7 @@
 #pragma once
 #include <math.h>
 #include <stdint.h>
+#include "directive.h"
 #include "intent.h"
 #include "mood.h"
 #include "music_event.h"
@@ -62,6 +63,7 @@ class Mind {
   void tick(Mood mood, const Body& body, const Sighting* things, int count, uint32_t now);  // once per frame
   bool takeTurn();                         // wants to turn round to face something (once)
   void setFamiliarity(float f) { familiarity_ = f; }   // 0 a stranger .. 1 an old friend (Bond)
+  void direct(const Directive& d, uint32_t now);       // a suggestion from the director (optional)
   Want want() const { return want_; }      // this frame
 
   Intent      intent() const { return intent_; }
@@ -111,4 +113,7 @@ class Mind {
 
   bool greeting(uint32_t now) const { return greetUntil_ && (int32_t)(now - greetUntil_) < 0; }
   bool shy(uint32_t now) const { return shyUntil_ && (int32_t)(now - shyUntil_) < 0; }
+  bool directed(uint32_t now) const { return directedUntil_ && (int32_t)(now - directedUntil_) < 0; }
+  Directive  directive_;
+  uint32_t   directedUntil_ = 0;
 };

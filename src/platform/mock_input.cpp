@@ -31,6 +31,7 @@ void MockInput::key(char c, uint32_t now) {
     case 'n': nextChar_ = true; break;    // next character pack
     case 'b': nextScene_ = true; break;   // next scene (backdrop)
     case 'x': forget_ = true; break;      // forget the player (memory wiped)
+    case 'g': director_ = true; break;    // director mode on/off (summaries out, suggestions in)
     default: break;  // includes \r and \n from the serial monitor
   }
 }

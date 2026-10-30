@@ -18,7 +18,7 @@ void Mind::reset(uint32_t now) {
   lastSound_ = lastPlayed_ = lastTick_ = now;
   played_ = holding_ = noticing_ = turn_ = false;
   lastMood_ = Mood::Asleep;
-  greetUntil_ = shyUntil_ = 0;
+  greetUntil_ = shyUntil_ = directedUntil_ = 0;
   for (int i = 0; i < MIND_MAX_SIGHTINGS; i++) { interest_[i] = 1; wasResting_[i] = true; landedAt_[i] = 0; }
   nextGlance_ = now + rng_.range(cfg_.glanceMinMs, cfg_.glanceMaxMs);
   glanceUntil_ = now;
@@ -78,8 +78,14 @@ void Mind::updateDrives(Mood mood, uint32_t now, float dtMs) {
 
 // --- attention --------------------------------------------------------------------
 
+void Mind::direct(const Directive& d, uint32_t now) {
+  directive_ = d;
+  directedUntil_ = now + d.forMs;
+}
+
 float Mind::scoreYou(Mood mood, uint32_t now) const {
   if (greeting(now)) return 2.0f;                               // hello!
+  if (directed(now) && directive_.lookAtYou) return 1.5f;       // the director says: look at them
   float shyness = shy(now) ? 0.3f : 0.0f;                       // a stranger: eyes to itself
   return 0.25f + 0.5f * wantsYou_ + youBoost_ + (dancing(mood) ? 0.3f : 0.0f) - shyness;
 }
@@ -167,8 +173,10 @@ void Mind::decide(Mood mood, uint32_t now) {
   Intent want = Intent::None;
   bool holding = focus_ == Focus::Leaf && target_.held;
   bool friendHello = greeting(now) && familiarity_ >= cfg_.friendAt;
+  bool suggested = directed(now) && directive_.intent != Intent::None;
   if (mood == Mood::Curious) {
     if (friendHello) want = Intent::WantsYou;                   // waves, bounces: you're back!
+    else if (suggested && !holding) want = directive_.intent;   // the director's idea (only while it's quiet)
     else if (holding) want = Intent::Investigate;
     else if (focus_ == Focus::Leaf) want = Intent::Watch;
     else if (focus_ == Focus::Spot) want = Intent::Investigate;
@@ -177,7 +185,7 @@ void Mind::decide(Mood mood, uint32_t now) {
   }
   if (want == intent_) return;
   // Noticing things is instant; settling into a mood of wanting takes a moment.
-  bool urgent = want == Intent::Watch || want == Intent::Investigate || friendHello || mood != Mood::Curious;
+  bool urgent = want == Intent::Watch || want == Intent::Investigate || friendHello || suggested || mood != Mood::Curious;
   if (!urgent && now - intentSince_ < cfg_.minIntentMs) return;
   intent_ = want;
   intentSince_ = now;
@@ -243,7 +251,7 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
     else interest_[i] = fminf(1.0f, interest_[i] + dtMs / (cfg_.habituateMs * 2));
   }
   // You only hold attention when there's reason to look (playing, missing you).
-  bool hello = greeting(now);
+  bool hello = greeting(now) || (directed(now) && directive_.lookAtYou);
   if (target_.focus == Focus::You && !dancing(mood) && !noticing_ && !hello &&
       ((youBoost_ < 0.05f && wantsYou_ < 0.3f) || shy(now)))
     target_ = Target();
@@ -254,7 +262,11 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
   act(body, count);
 
   if (noticing_) return;                           // keep "whoa!" until it reacts
-  if (hello && mood != Mood::Asleep) {
+  if (directed(now) && directive_.thought[0]) {
+    think(directive_.thought);
+    return;
+  }
+  if (greeting(now) && mood != Mood::Asleep) {
     think(familiarity_ >= cfg_.friendAt ? "you're back!" : familiarity_ < cfg_.strangerBelow ? "who's this?" : "oh - hi");
     return;
   }
