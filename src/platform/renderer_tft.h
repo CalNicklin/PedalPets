@@ -11,9 +11,11 @@ struct HudInfo {
   const char* thought;
 };
 
-// What the pet says: shown as a comic caption box in the bottom-right corner.
+// What the pet thinks aloud: a comic thought cloud in the top-left corner,
+// with a trail of little circles towards its head.
 struct Bubble {
   const char* text;      // nullptr: nothing to say
+  int         headX, headY;   // where the trail points (screen)
 };
 
 class RendererTft {
@@ -31,11 +33,13 @@ class RendererTft {
   void finish(const HudInfo* hud);
   void blitPal4(const uint8_t* src, int w, int h, int x0, int y0, bool flip, const uint16_t* palette);
   void drawLeaves(const Scene& scene, const LeafField& leaves, bool front);
-  void drawCaption(const char* text);
+  void drawCaption(const Bubble& b);
+  void drawItalic(const char* text, int x, int y, uint16_t ink);
   static void swapPalette(const uint16_t* in, uint16_t* out);
 
   TFT_eSPI         tft_;
   TFT_eSprite      canvas_{&tft_};
+  TFT_eSprite      textLine_{&tft_};      // one line of text, slanted into the canvas (italic)
   const Character* paletteFor_ = nullptr;
   const Scene*     leafPaletteFor_ = nullptr;
   const Scene*     crowdPaletteFor_ = nullptr;

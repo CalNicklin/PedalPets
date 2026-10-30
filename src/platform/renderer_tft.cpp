@@ -5,7 +5,7 @@
 
 namespace {
 constexpr uint16_t PLAIN_BG = 0xDF3D;   // used when there's no scene
-constexpr uint16_t CAPTION_FILL = 0x5F3F, CAPTION_INK = 0x20C3;   // comic yellow, ink (BGR panel order)
+constexpr uint16_t CAPTION_FILL = 0xFFFF, CAPTION_INK = 0x20C3;   // white, ink (BGR panel order)
 constexpr int      CHAR_W = 6, LINE_H = 9;                       // the display's built-in font
 }  // namespace
 
@@ -15,6 +15,8 @@ void RendererTft::begin() {
   tft_.fillScreen(PLAIN_BG);
   canvas_.setColorDepth(16);
   canvas_.createSprite(SCREEN_W, SCREEN_H);
+  textLine_.setColorDepth(1);
+  textLine_.createSprite(SPEECH_LINE * CHAR_W, 8);
   canvas_.setSwapBytes(true);
 }
 
@@ -59,24 +61,65 @@ void RendererTft::blitPal4(const uint8_t* src, int w, int h, int x0, int y0, boo
   }
 }
 
-// A comic caption: a yellow box with a heavy black edge in the bottom-right
-// corner, the line in capitals, left-aligned. It never covers the pet's face.
-void RendererTft::drawCaption(const char* text) {
+// One line in the built-in font, slanted: drawn upright off-screen, then copied
+// in with the top rows shifted right (a pixel italic; the font has none).
+void RendererTft::drawItalic(const char* text, int x, int y, uint16_t ink) {
+  textLine_.fillSprite(0);
+  textLine_.setTextFont(1);
+  textLine_.setTextColor(1, 0);
+  textLine_.setCursor(0, 0);
+  textLine_.print(text);
+  int w = (int)strlen(text) * CHAR_W;
+  for (int r = 0; r < 8; r++) {
+    int shift = (7 - r) / 3;                       // 2, 2, 1, 1, 1, 0, 0, 0
+    for (int c = 0; c < w; c++)
+      if (textLine_.readPixel(c, r)) canvas_.drawPixel(x + c + shift, y + r, ink);
+  }
+}
+
+// A thought cloud, Silver Age style: white with a scalloped edge in a thin ink
+// line, the words in slanted capitals (one line when they fit), and a trail of
+// shrinking circles towards the head.
+void RendererTft::drawCaption(const Bubble& b) {
   char lines[2][SPEECH_LINE + 1];
-  int n = wrapSpeech(text, lines);
+  int n = wrapSpeech(b.text, lines);
   if (!n) return;
   int len = (int)strlen(lines[0]);
   if (n > 1 && (int)strlen(lines[1]) > len) len = (int)strlen(lines[1]);
-  int w = len * CHAR_W + 7, h = n * LINE_H + 5;
-  int x = SCREEN_W - w - 2, y = SCREEN_H - h - 2;
-  canvas_.fillRect(x + 1, y + 1, w, h, CAPTION_INK);         // a hard drop shadow
-  canvas_.fillRect(x - 1, y - 1, w, h, CAPTION_INK);
-  canvas_.fillRect(x, y, w - 2, h - 2, CAPTION_FILL);
-  canvas_.setTextFont(1);
-  canvas_.setTextColor(CAPTION_INK, CAPTION_FILL);
+  int w = len * CHAR_W + 10, h = n * LINE_H + 6;
+  int x = 4, y = 4;
+  // The scallops: ink bumps round the edge, white bumps inside them, then the body.
+  auto edge = [&](uint16_t col, int r) {
+    for (int px = x + 3; px <= x + w - 3; px += 6) {
+      canvas_.fillCircle(px, y, r, col);
+      canvas_.fillCircle(px, y + h - 1, r, col);
+    }
+    for (int py = y + 3; py <= y + h - 4; py += 5) {
+      canvas_.fillCircle(x, py, r, col);
+      canvas_.fillCircle(x + w - 1, py, r, col);
+    }
+  };
+  edge(CAPTION_INK, 3);
+  edge(CAPTION_FILL, 2);
+  canvas_.fillRect(x, y, w, h, CAPTION_FILL);
   for (int i = 0; i < n; i++) {
-    canvas_.setCursor(x + 3, y + 2 + i * LINE_H);
-    for (const char* c = lines[i]; *c; c++) canvas_.print((char)toupper((unsigned char)*c));
+    for (char* c = lines[i]; *c; c++) *c = (char)toupper((unsigned char)*c);
+    drawItalic(lines[i], x + 4, y + 3 + i * LINE_H, CAPTION_INK);
+  }
+  // The trail: three circles, big to small, a third of the way to the head.
+  int sx = x + w - 6, sy = y + h + 4;
+  float dx = (float)(b.headX - sx), dy = (float)(b.headY - sy);
+  float d = sqrtf(dx * dx + dy * dy);
+  if (d < 12) return;
+  dx /= d;
+  dy /= d;
+  static const int R[] = {3, 2, 1};
+  float along = 0;
+  for (int i = 0; i < 3; i++) {
+    int cx = sx + (int)(dx * along), cy = sy + (int)(dy * along);
+    canvas_.fillCircle(cx, cy, R[i], CAPTION_FILL);
+    canvas_.drawCircle(cx, cy, R[i], CAPTION_INK);
+    along += 2.0f * R[i] + 4;
   }
 }
 
@@ -125,6 +168,6 @@ void RendererTft::drawDoll(const Character& c, const Scene* scene, const DollPla
     const MarkSize& sz = c.choreo.markSizes[marks[i].image];
     blitPal4(c.markPixels[marks[i].image], sz.w, sz.h, cx + marks[i].x, cy + marks[i].y, false, palette_);
   }
-  if (bubble && bubble->text) drawCaption(bubble->text);
+  if (bubble && bubble->text) drawCaption(*bubble);
   finish(hud);
 }

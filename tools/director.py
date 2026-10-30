@@ -41,7 +41,7 @@ import time
 
 INTENTS = ["None", "Watch", "Bored", "WantsYou", "Investigate"]
 SUGGESTIBLE = ["Bored", "WantsYou"]   # the others come from what it sees (a leaf); only while it's quiet
-THOUGHT_MAX = 39
+THOUGHT_MAX = 39   # the board shows up to two lines; the prompt asks for one (24)
 QUIET_S = 18
 MODEL = "claude-haiku-5-5"   # newest Haiku (checked with models.list, 2026-10-30)
 KEY_FILE = os.path.expanduser("~/.config/pedalpets/anthropic_key")
@@ -112,7 +112,7 @@ class Claude:
         "Reply with ONE line of JSON and nothing else. Usually reply {{}}: stay quiet unless you have "
         "something that really adds to the moment - a reaction to a moment, a comment on the playing, "
         "missing the player in a long silence, recognising an old friend. At most one line in three.\n"
-        'Otherwise any of {{"thought": first person, under 38 characters, no commas, "move": one of its '
+        'Otherwise any of {{"thought": first person, under 24 characters (it shows on one line), "move": one of its '
         'moves or null, "look": "you" or null, "intent": "Bored" or "WantsYou" (only when mood is Curious), '
         '"for_s": 3..15}}.\n'
         "Its moves: {moves}.\nStay in character, be playful, never repeat a thought, and don't narrate "
