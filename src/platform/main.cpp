@@ -72,9 +72,11 @@ void setup() {
                  "d HUD | t telemetry | r reset");
 }
 
-void loop() {
-  uint32_t now = millis();
-  while (Serial.available()) mock.key((char)Serial.read(), now);
+namespace {
+// Act on each key as it arrives, so "n1" switches character *then* starts
+// script 1 (a reset after the script started would cancel it).
+void handleKey(char c, uint32_t now) {
+  mock.key(c, now);
   if (mock.takeNextCharacter()) {
     characterIndex = (characterIndex + 1) % CHARACTER_COUNT;
     resetAll(now);
@@ -89,6 +91,12 @@ void loop() {
     telemetry = !telemetry;
     if (telemetry) sendHeader();
   }
+}
+}  // namespace
+
+void loop() {
+  uint32_t now = millis();
+  while (Serial.available()) handleKey((char)Serial.read(), now);
 
   if ((int32_t)(now - nextTick) < 0) return;
   if (now - nextTick > 100) nextTick = now;  // fell far behind (e.g. serial burst): resync

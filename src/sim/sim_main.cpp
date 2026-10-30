@@ -101,7 +101,7 @@ int main(int argc, char** argv) {
     printf("%s", line);
     if (getenv("PEDALPETS_CHANNELS")) {   // debug: raw channel values after the parts
       for (int c = 0; c < character->doll.channelCount; c++)
-        printf(",%s=%.1f", character->channelNames[c], pet.choreo.pose().ch[c]);
+        printf(",%s=%.2f", character->channelNames[c], pet.choreo.pose().ch[c]);
     }
     printf("\n");
   }

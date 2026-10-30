@@ -317,7 +317,8 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
   if (!reacting && st.beatMs && now - lastPick_ > cfg_.pickTimeoutMs && now - lastBeat_ >= st.beatMs)
     startBeat(mood, now);
 
-  // Travel: x tracks move the pet forward, unweighted (it really goes there).
+  // Travel: x tracks move the pet forward, by the move's weight like its legs
+  // (a fading walk takes smaller steps and covers less ground; never amplified).
   if (c_->xChannel >= 0) {
     for (const Slot& s : slots_) {
       if (s.move < 0) continue;
@@ -327,7 +328,7 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
         prev.frame--;
         d -= sample(prev, c_->xChannel);
       }
-      stageX_ -= facing_ * d;
+      stageX_ -= facing_ * d * s.weight;
     }
     // Reactions aren't vetted against the stage; never let them carry it off.
     stageX_ = fmaxf(cfg_.stageMin - 4, fminf(cfg_.stageMax + 4, stageX_));
@@ -351,8 +352,9 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
     if (ch == c_->xChannel) { pose_.ch[ch] = stageX_; continue; }
     if (ch == c_->faceChannel) { pose_.ch[ch] = facing_; continue; }
     float v = stance_[ch];
+    float amp = ch == c_->strideChannel ? 1.0f : beatAmp;   // steps must match the travel
     for (const Slot& s : slots_)
-      if (s.move >= 0) v += s.weight * (s.beat ? beatAmp : 1.0f) * sample(s, ch);
+      if (s.move >= 0) v += s.weight * (s.beat ? amp : 1.0f) * sample(s, ch);
     pose_.ch[ch] = v;
   }
   if (gazeWeight_ > 0) {                          // the Mind's gaze over the moves

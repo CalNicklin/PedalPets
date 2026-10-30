@@ -3,18 +3,18 @@
 
 Usage:
   PEDALPETS_CHANNELS=1 .pio/build/sim/program "1@100" 85000 7 > run.csv
-  python3 tools/doll_checks.py run.csv
+  python3 tools/doll_checks.py run.csv [--leg-px 21.5]
 
 Each check reads the choreographer's raw channels (hop, legs, squash, x,
 face) frame by frame and lists the moments that break a principle:
   anticipation  every take-off is preceded by a crouch
   landing       every touch-down squashes
-  contact       feet don't slide while on the ground
+  contact       feet don't slide on the ground (walking: travel matches the legs)
   turns         facing flips happen in the air, never on the ground
 """
 
+import math
 import re
-import sys
 
 GROUND = 0.5          # hop below this (pixels) counts as on the ground
 AIRBORNE = 2.0        # hop above this counts as a jump
@@ -64,9 +64,25 @@ def landings_without_squash(rows):
     return bad
 
 
-def foot_slides(rows):
-    return [b for a, b in zip(rows, rows[1:])
-            if a["hop"] < GROUND and b["hop"] < GROUND and abs(b["x"] - a["x"]) > SLIDE]
+def foot_slides(rows, leg_px=None, stride_deg=26):
+    """On the ground the body may only travel as the legs carry it: with no
+    stride change it shouldn't move at all; walking (given the leg length) it
+    should move as far as the planted foot swings back."""
+    bad = []
+    for a, b in zip(rows, rows[1:]):
+        if a["hop"] >= GROUND or b["hop"] >= GROUND:
+            continue
+        dx = abs(b["x"] - a["x"])
+        ds = abs(b.get("stride", 0) - a.get("stride", 0))
+        if ds < 0.01:
+            if dx > SLIDE:
+                bad.append(b)
+        elif leg_px:
+            carried = leg_px * abs(math.sin(math.radians(stride_deg * b["stride"])) -
+                                   math.sin(math.radians(stride_deg * a["stride"])))
+            if abs(dx - carried) > max(SLIDE, 0.5 * carried):
+                bad.append(b)
+    return bad
 
 
 def ground_turns(rows):
@@ -82,10 +98,15 @@ CHECKS = [
 
 
 def main():
-    rows = load(sys.argv[1])
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("run")
+    ap.add_argument("--leg-px", type=float, help="hip-to-sole length: also checks walking feet stay planted")
+    a = ap.parse_args()
+    rows = load(a.run)
     failed = 0
     for name, check in CHECKS:
-        bad = check(rows)
+        bad = check(rows, a.leg_px) if check is foot_slides else check(rows)
         failed += len(bad)
         print(f"{name}: {len(bad)}")
         for r in bad[:5]:

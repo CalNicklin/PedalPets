@@ -224,7 +224,7 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
     case Intent::Watch:       think("ooh a leaf - watching it"); break;
     case Intent::Investigate: think("where did it land? going to look"); break;
     case Intent::WantsYou:    think("hey... play something"); break;
-    case Intent::Bored:       think("bored - pecking about"); break;
+    case Intent::Bored:       think("bored - fidgeting"); break;
     case Intent::None:
       if (mood == Mood::Hyped) think("yes! this rocks");
       else if (mood == Mood::IntoIt) think(focus_ == Focus::Leaf ? "grooving - eyeing a leaf" : "grooving with you");

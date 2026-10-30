@@ -216,7 +216,7 @@ def emit(t, marks, anchor, ns):
     out += ["  },", f"  VOCAB, REACTIONS, {len(t['reactions'])}, REACTION_MOVE_IDS, {len(ch)}, {xi}, {fi},",
             f"  MARK_ANIMS, MARK_FRAMES, {len(marks['anims'])}, MARK_SIZES, {anchor},",
             "  {" + ", ".join(f"{{{f}, {n}, {a}, {b}}}" for f, n, a, b in t["intents"]) + "},",
-            f"  {idx('look')}, {idx('pitch')}, {idx('eyes')}, {t['turn']},",
+            f"  {idx('look')}, {idx('pitch')}, {idx('eyes')}, {t['turn']}, {idx('stride')},",
             "};", "", f"}}  // namespace {ns}", ""]
     return "\n".join(out)
 

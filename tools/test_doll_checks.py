@@ -48,3 +48,19 @@ def test_turn_on_the_ground_is_flagged():
     air = rows(face=[1, 1, -1, -1], hop=[0, 5, 6, 0])
     assert len(dc.ground_turns(ground)) == 1
     assert dc.ground_turns(air) == []
+
+
+def test_walking_feet_must_stay_planted():
+    import math
+    leg = 20.0
+    def carried(s0, s1):
+        return leg * abs(math.sin(math.radians(26 * s1)) - math.sin(math.radians(26 * s0)))
+    strides = [0, 0.2, 0.4, 0.2, 0, -0.2, -0.4]
+    xs, x = [], 0.0
+    for a, b in zip([0] + strides, strides):
+        x += carried(a, b)
+        xs.append(x)
+    planted = rows(stride=strides, x=xs)
+    skating = rows(stride=strides, x=[i * 0.2 for i in range(len(strides))])
+    assert dc.foot_slides(planted, leg_px=leg) == []
+    assert len(dc.foot_slides(skating, leg_px=leg)) >= 3

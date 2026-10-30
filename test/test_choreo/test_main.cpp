@@ -71,6 +71,7 @@ static Choreography make() {
   c.intents[(int)Intent::Bored] = {2, 1, 300, 300};     // bored: hop forward every 300 ms
   c.lookChannel = 1; c.pitchChannel = 2; c.eyesChannel = -1;
   c.turnMove = TURN;
+  c.strideChannel = -1;
   return c;
 }
 static Choreography CH = make();
@@ -176,6 +177,22 @@ void test_requested_turn_plays_the_turn_move_once() {
   TEST_ASSERT_FALSE(ch->requestTurn(t));                  // already turning
   frames(Mood::Curious, 4);
   TEST_ASSERT_EQUAL_FLOAT(-1, ch->pose().ch[4]);
+}
+
+void test_gait_channel_is_never_amplified_by_the_beat() {
+  // beat_b drives channel 2; as the gait channel its steps must match the
+  // (unamplified) travel, so playing hard doesn't stretch it.
+  Choreography c = make();
+  c.strideChannel = 2;
+  delete ch;
+  rng = Rng(1);
+  ch = new Choreographer(c, rng);
+  t = 0;
+  ch->reset(Mood::IntoIt, t);
+  send(EventType::Pick, Mood::IntoIt);
+  float peak = 0;
+  for (int i = 0; i < 6; i++) { frames(Mood::IntoIt, 1, 1.0f); peak = fmaxf(peak, ch->pose().ch[2]); }
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 4.0f, peak);              // beat_b peaks at 4 (16 quarter units)
 }
 
 void test_reaction_ducks_other_moves() {
@@ -293,6 +310,7 @@ int main(int, char**) {
   RUN_TEST(test_intent_vocabulary_replaces_mood_idles);
   RUN_TEST(test_gaze_points_the_head);
   RUN_TEST(test_requested_turn_plays_the_turn_move_once);
+  RUN_TEST(test_gait_channel_is_never_amplified_by_the_beat);
   RUN_TEST(test_reaction_ducks_other_moves);
   RUN_TEST(test_reaction_fades_in_not_cut);
   RUN_TEST(test_lower_priority_ignored_during_reaction);

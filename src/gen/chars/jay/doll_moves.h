@@ -78,7 +78,7 @@ static const Choreography CHOREO = {
   VOCAB, REACTIONS, 7, REACTION_MOVE_IDS, 15, 12, 13,
   MARK_ANIMS, MARK_FRAMES, 5, MARK_SIZES, 2,
   {{37, 0, 0, 0}, {37, 3, 900, 2000}, {40, 8, 900, 2200}, {48, 5, 600, 1400}, {53, 3, 300, 800}},
-  5, 4, 6, 15,
+  5, 4, 6, 15, 14,
 };
 
 }  // namespace jay_gen

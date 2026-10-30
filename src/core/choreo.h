@@ -77,6 +77,9 @@ struct Choreography {
   // Head channels the Mind's gaze steers, and the move it turns round with (-1 = none).
   int8_t               lookChannel, pitchChannel, eyesChannel;
   int8_t               turnMove;
+  // The gait (leg swing) channel: never amplified by the beat, so steps stay
+  // matched to the (unamplified) travel and planted feet don't skate.
+  int8_t               strideChannel;
 };
 
 struct ChoreoConfig {
