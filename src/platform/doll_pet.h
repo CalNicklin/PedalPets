@@ -124,6 +124,18 @@ class DollPet {
 
   const Hand* hands(int* count) const { *count = handCount_; return hands_; }   // this frame's hands
 
+  // The head on screen (its image's box), for a speech bubble above it. False if none.
+  bool headBox(int* x0, int* y0, int* x1, int* y1) const {
+    if (char_->headPart < 0) return false;
+    const DollPlacement& p = parts[char_->headPart];
+    const DollImage& im = char_->doll.images[p.image];
+    *x0 = canvasX() + p.x;
+    *y0 = canvasY() + p.y;
+    *x1 = *x0 + im.w;
+    *y1 = *y0 + im.h;
+    return true;
+  }
+
   int canvasX() const { return (SCREEN_W - char_->canvasW) / 2; }   // the doll canvas, bottom-centred
   int canvasY() const { return SCREEN_H - char_->canvasH; }
 

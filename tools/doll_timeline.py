@@ -45,6 +45,7 @@ class Art:
         self.canvas = meta["canvas"]
         self.order = [next(i for i, p in enumerate(meta["parts"]) if p["name"] == n) for n in meta["draw_order"]]
         self.part_names = [p["name"] for p in meta["parts"]]
+        self.head = "skull" if "skull" in self.part_names else "head"
         self.crops, self.pivots, self.labels = [], [], []
         for p in meta["parts"]:
             for img in p["images"]:
@@ -87,7 +88,34 @@ class Art:
         self.draw_leaves(img, row, 1)
         for n, x, y in row["marks"]:
             img.alpha_composite(self.marks[n], (self.ox + x, self.oy + y))
+        if row.get("say") and row["say"] != "-":
+            self.draw_bubble(img, row)
         return img
+
+    def draw_bubble(self, img, row):
+        """Roughly as the board draws it (renderer_tft.cpp drawBubble): above the head, 6 px font."""
+        from PIL import ImageFont
+        words, lines = row["say"].split(), [""]
+        for w in words:
+            if len(lines[-1]) + len(w) + (1 if lines[-1] else 0) <= 19:
+                lines[-1] = (lines[-1] + " " + w).strip()
+            elif len(lines) < 2:
+                lines.append(w)
+        k = self.part_names.index(self.head) if self.head in self.part_names else 2
+        n, x, y = row["parts"][k]
+        hw, hh = self.crops[n].size
+        hx0, hy0 = self.ox + x, self.oy + y
+        w, h = max(len(l) for l in lines) * 6 + 8, len(lines) * 9 + 5
+        bx, by = hx0 + hw // 2 - w // 2, hy0 - h - 7
+        if by < 1:
+            by = 1
+            bx = hx0 + hw + 4 if not row["flip"] else hx0 - w - 4
+        bx = max(1, min(SCREEN_W - 1 - w, bx))
+        d = ImageDraw.Draw(img)
+        d.rounded_rectangle([bx, by, bx + w - 1, by + h - 1], 4, fill=(255, 255, 255), outline=(28, 24, 32))
+        font = ImageFont.load_default(size=8)
+        for i, l in enumerate(lines):
+            d.text((bx + (w - len(l) * 6) // 2 + 1, by + 2 + i * 9), l, fill=(28, 24, 32), font=font)
 
     def mask(self, row):
         m = Image.new("L", (SCREEN_W, SCREEN_H), 0)
@@ -117,7 +145,8 @@ def load(path):
                          "leaves": [(int(r[f"l{i}_s"]), int(r[f"l{i}_x"]), int(r[f"l{i}_y"]), int(r[f"l{i}_f"]))
                                     for i in range(nl)],
                          "crowd": [(int(r[f"c{i}_s"]), int(r[f"c{i}_x"]), int(r[f"c{i}_y"]), int(r[f"c{i}_f"]))
-                                   for i in range(nc)]})
+                                   for i in range(nc)],
+                         "say": r.get("say", "-")})
     return rows
 
 

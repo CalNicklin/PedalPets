@@ -207,6 +207,37 @@ void test_the_music_comes_before_the_director() {
   TEST_ASSERT_EQUAL(Intent::None, mind->intent());           // it's dancing, not moping
 }
 
+void test_it_says_a_few_things_aloud() {
+  fresh();
+  run(Mood::Curious, 120);
+  send(EventType::BigHit, Mood::Curious);                      // the double-take
+  run(Mood::Curious, 1);
+  TEST_ASSERT_EQUAL_STRING("whoa!", mind->line(t));
+  run(Mood::Curious, 100);                                     // 3 s later it has gone
+  TEST_ASSERT_NULL(mind->line(t));
+}
+
+void test_it_doesnt_chatter() {
+  wakeUp(0.9f);                                                // "you're back!"
+  TEST_ASSERT_EQUAL_STRING("you're back!", mind->line(t));
+  run(Mood::Curious, 90);
+  playFor(Mood::IntoIt, 1);
+  run(Mood::Curious, 60);                                      // misses you within 8 s: keeps it to itself
+  TEST_ASSERT_NULL(mind->line(t));
+}
+
+void test_director_thoughts_are_said_aloud() {
+  fresh();
+  Directive d;
+  d.forMs = 3000;
+  strcpy(d.thought, "nice pocket you got");
+  mind->direct(d, t);
+  run(Mood::Hyped, 2);
+  TEST_ASSERT_EQUAL_STRING("nice pocket you got", mind->line(t));
+  run(Mood::Hyped, 110);
+  TEST_ASSERT_NULL(mind->line(t));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_loud_hit_after_quiet_gets_a_double_take);
@@ -225,5 +256,8 @@ int main() {
   RUN_TEST(test_a_friend_misses_you_sooner);
   RUN_TEST(test_a_director_can_suggest_what_it_wants_and_thinks);
   RUN_TEST(test_the_music_comes_before_the_director);
+  RUN_TEST(test_it_says_a_few_things_aloud);
+  RUN_TEST(test_it_doesnt_chatter);
+  RUN_TEST(test_director_thoughts_are_said_aloud);
   return UNITY_END();
 }

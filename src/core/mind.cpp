@@ -19,6 +19,10 @@ void Mind::reset(uint32_t now) {
   played_ = holding_ = noticing_ = turn_ = false;
   lastMood_ = Mood::Asleep;
   greetUntil_ = shyUntil_ = directedUntil_ = 0;
+  line_ = nullptr;
+  lineUntil_ = lastLine_ = 0;
+  saidHyped_ = false;
+  lastIntent_ = Intent::None;
   for (int i = 0; i < MIND_MAX_SIGHTINGS; i++) { interest_[i] = 1; wasResting_[i] = true; landedAt_[i] = 0; }
   nextGlance_ = now + rng_.range(cfg_.glanceMinMs, cfg_.glanceMaxMs);
   glanceUntil_ = now;
@@ -44,6 +48,7 @@ bool Mind::onEvent(const MusicEvent& e, Mood mood, uint32_t now) {
     holding_ = noticing_ = true;
     heldUntil_ = now + cfg_.noticeMs;
     think("whoa! what was that?");
+    say("whoa!", now, cfg_.sayMs, true);
     return false;
   }
   return true;
@@ -81,6 +86,20 @@ void Mind::updateDrives(Mood mood, uint32_t now, float dtMs) {
 void Mind::direct(const Directive& d, uint32_t now) {
   directive_ = d;
   directedUntil_ = now + d.forMs;
+  if (d.thought[0]) say(directive_.thought, now, d.forMs < cfg_.directedSayMaxMs ? d.forMs : cfg_.directedSayMaxMs, true);
+}
+
+// Saying something aloud: its own lines only at moments and not too often; the
+// director's always (it's sparing already).
+void Mind::say(const char* text, uint32_t now, uint32_t forMs, bool always) {
+  if (!always && lastLine_ && now - lastLine_ < cfg_.sayGapMs) return;
+  line_ = text;
+  lineUntil_ = now + forMs;
+  lastLine_ = now;
+}
+
+const char* Mind::line(uint32_t now) const {
+  return line_ && (int32_t)(now - lineUntil_) < 0 ? line_ : nullptr;
 }
 
 float Mind::scoreYou(Mood mood, uint32_t now) const {
@@ -215,6 +234,13 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
     bool stranger = familiarity_ < cfg_.strangerBelow;
     greetUntil_ = now + (stranger ? cfg_.greetMs / 3 : cfg_.greetMs);
     shyUntil_ = stranger ? now + cfg_.shyMs : 0;
+    say(familiarity_ >= cfg_.friendAt ? "you're back!" : stranger ? "who's this?" : "oh - hi!", now, cfg_.sayMs, true);
+  }
+  if (mood == Mood::Hyped && !saidHyped_) {                     // the first time it really gets going
+    say("yes! this rocks!", now, cfg_.sayMs, false);
+    saidHyped_ = true;
+  } else if (mood == Mood::Curious || mood == Mood::Asleep) {
+    saidHyped_ = false;
   }
   lastMood_ = mood;
 
@@ -260,6 +286,13 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
   aim(mood, body, now);
   decide(mood, now);
   act(body, count);
+  if (intent_ != lastIntent_) {                                 // a new want: sometimes it says so
+    if (intent_ == Intent::WantsYou) say("hey... play something?", now, cfg_.sayMs, false);
+    else if (intent_ == Intent::Bored) say("*sigh*", now, cfg_.sayMs, false);
+    lastIntent_ = intent_;
+  }
+  if (target_.held && !lastHeld_) say("ooh - a leaf!", now, cfg_.sayMs, false);   // got one
+  lastHeld_ = target_.held;
 
   if (noticing_) return;                           // keep "whoa!" until it reacts
   if (directed(now) && directive_.thought[0]) {

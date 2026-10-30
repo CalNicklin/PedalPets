@@ -16,6 +16,7 @@ inline int dollTelemetryHeader(char* b, int n, int parts) {
   for (int i = 0; i < CHOREO_MAX_MARKS; i++) k += snprintf(b + k, n - k, ",m%d_img,m%d_x,m%d_y", i, i, i);
   for (int i = 0; i < TELEMETRY_LEAVES; i++) k += snprintf(b + k, n - k, ",l%d_s,l%d_x,l%d_y,l%d_f", i, i, i, i);
   for (int i = 0; i < CROWD_MAX; i++) k += snprintf(b + k, n - k, ",c%d_s,c%d_x,c%d_y,c%d_f", i, i, i, i);
+  k += snprintf(b + k, n - k, ",say");
   return k;
 }
 
@@ -25,7 +26,7 @@ inline int dollTelemetryRow(char* b, int n, uint32_t t, int mood, float energy, 
                             const char* thought, long frameUs, const DollPlacement* parts, int partCount,
                             const MarkPlacement* marks, int markCount, const LeafField* leaves,
                             float feetY, LeafSprite leafSprite, const CritterView* crowd = nullptr,
-                            int crowdCount = 0) {
+                            int crowdCount = 0, const char* say = nullptr) {
   int k = snprintf(b, n, "%u,%d,%.3f,%s,%s,", (unsigned)t, mood, energy, reaction ? reaction : "-",
                    thought ? thought : "-");
   if (frameUs >= 0) k += snprintf(b + k, n - k, "%ld", frameUs);
@@ -49,5 +50,6 @@ inline int dollTelemetryRow(char* b, int n, uint32_t t, int mood, float energy, 
     else
       k += snprintf(b + k, n - k, ",-1,0,0,0");
   }
+  k += snprintf(b + k, n - k, ",%s", say ? say : "-");   // lines never contain commas
   return k;
 }

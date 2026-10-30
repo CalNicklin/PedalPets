@@ -45,6 +45,9 @@ struct MindConfig {
   float    habituateMs    = 5000;   // watching the same thing gets dull
   uint32_t glanceMinMs    = 900, glanceMaxMs = 2600;
   uint32_t greetMs        = 2500;   // waking to someone it knows: hello for this long
+  uint32_t sayMs          = 2400;   // its own lines stay up this long...
+  uint32_t sayGapMs       = 8000;   // ...and come no closer together than this
+  uint32_t directedSayMaxMs = 4000; // a director's line, at most this long
   uint32_t shyMs          = 6000;   // ... to a stranger: a glance, then it keeps its eyes to itself
   float    friendAt       = 0.5f, strangerBelow = 0.15f;
   float    performWeight  = 0.35f;  // gaze weight while dancing (light: the nods and sways show)
@@ -70,6 +73,7 @@ class Mind {
   Focus       focus() const { return focus_; }
   const Gaze& gaze() const { return gaze_; }
   const char* thought() const { return thought_; }
+  const char* line(uint32_t now) const;     // what it says aloud right now (a speech bubble), or nullptr
   float       boredom() const { return boredom_; }
   float       wantsYou() const { return wantsYou_; }
 
@@ -84,6 +88,7 @@ class Mind {
   void   decide(Mood mood, uint32_t now);
   void   act(const Body& body, int count);
   void   think(const char* t) { thought_ = t; }
+  void   say(const char* text, uint32_t now, uint32_t forMs, bool always);
 
   Rng&       rng_;
   MindConfig cfg_;
@@ -116,4 +121,8 @@ class Mind {
   bool directed(uint32_t now) const { return directedUntil_ && (int32_t)(now - directedUntil_) < 0; }
   Directive  directive_;
   uint32_t   directedUntil_ = 0;
+  const char* line_ = nullptr;
+  uint32_t   lineUntil_ = 0, lastLine_ = 0;
+  bool       saidHyped_ = false, lastHeld_ = false;
+  Intent     lastIntent_ = Intent::None;
 };

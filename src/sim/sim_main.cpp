@@ -109,7 +109,7 @@ int main(int argc, char** argv) {
     dollTelemetryRow(line, sizeof(line), now, (int)pet.mood.mood(), pet.mood.energy(),
                      rx >= 0 ? character->moveNames[rx] : nullptr, pet.mind.thought(), -1, pet.parts, parts,
                      pet.marks, pet.markCount, scene && scene->leafColours ? &pet.leaves : nullptr,
-                     scene ? scene->feetY : 0, sprite, crowd, crowdCount);
+                     scene ? scene->feetY : 0, sprite, crowd, crowdCount, pet.mind.line(now));
     printf("%s", line);
     if (getenv("PEDALPETS_CHANNELS")) {   // debug: raw channel values after the parts
       for (int c = 0; c < character->doll.channelCount; c++)
