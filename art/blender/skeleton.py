@@ -12,6 +12,8 @@ import math
 import os
 import sys
 
+import bpy
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib  # noqa: E402
 from lib import J, P, action, blob, cone, joint, merge  # noqa: E402
@@ -44,6 +46,28 @@ def bone(name, mat, parent, top, length, r=0.032, knob=0.048):
     cone(name, mat, parent, (x, y, z - length / 2), r, r * 0.9, length)
     blob(name + "_k1", mat, parent, (x, y, z), (knob, knob, knob))
     blob(name + "_k2", mat, parent, (x, y, z - length), (knob * 0.9, knob * 0.9, knob * 0.9))
+
+
+def box(name, mat, parent, loc, size):
+    """A plain box (teeth, slits, the mouth's dark inside)."""
+    bpy.ops.mesh.primitive_cube_add(size=1)
+    o = bpy.context.object
+    o.name = name
+    o.data.materials.append(lib.material(mat))
+    o.parent = parent
+    o.location = loc
+    o.scale = size
+    return o
+
+
+def teeth(prefix, parent, centre, width=0.2, height=0.07, gaps=3):
+    """A row of teeth: a bone band with ink slits (each a pixel wide on screen,
+    so the teeth read as teeth after inking)."""
+    x, y, z = centre
+    box(prefix, "bone", parent, centre, (width, 0.02, height))
+    for i in range(gaps):
+        gx = x - width / 2 + width * (i + 1) / (gaps + 1)
+        box(f"{prefix}_gap{i}", "ink", parent, (gx, y - 0.012, z), (0.024, 0.01, height))
 
 
 def screen_joint(name, parent, loc):
@@ -102,23 +126,22 @@ def build_character():
         cone(f"bow{side}", "bow", neck, (0.055 * side, -0.06, -0.01), 0.045, 0.0, 0.09,
              scale=(1, 0.5, 0.9), rot=(0, 90 * side, 0))
 
-    # Skull: big cranium, face, sockets with glowing pupils, nose, upper teeth.
+    # Skull: big round cranium, sockets with glowing pupils, a nose, and a grin:
+    # upper teeth on the skull over a dark mouth, lower teeth on the jaw. Closed,
+    # the rows meet in a bite line; open, the dark inside shows between them.
     head = J["head"] = joint("head", neck, (0, 0, 0.08))
     blob("cranium", "bone", head, (0, 0.02, 0.28), (0.31, 0.28, 0.29))
-    blob("face", "bone", head, (0, -0.1, 0.17), (0.25, 0.2, 0.17))
     for side, name in ((-1, "R"), (1, "L")):
         blob(f"socket{name}", "socket", head, (0.115 * side, -0.24, 0.27), (0.085, 0.05, 0.09))
         eye = J[f"eye{name}"] = joint(f"eye{name}", head, (0.115 * side, -0.29, 0.26))
         blob(f"pupil{name}", "glow", eye, (0, 0, 0), (0.03, 0.02, 0.034))
-    cone("nose", "ink", head, (0, -0.28, 0.165), 0.035, 0.0, 0.05, rot=(180, 0, 0))
-    blob("upperteeth", "bone", head, (0, -0.2, 0.07), (0.16, 0.1, 0.05))
-    for i, x in enumerate((-0.07, -0.025, 0.025, 0.07)):
-        blob(f"utooth{i}", "ink", head, (x, -0.29, 0.065), (0.005, 0.02, 0.03))
-    jaw = J["jaw"] = joint("jaw", head, (0, 0.0, 0.07))
-    blob("mandible", "bone", jaw, (0, -0.17, -0.04), (0.16, 0.1, 0.05))
-    blob("chin", "bone", jaw, (0, -0.22, -0.06), (0.09, 0.05, 0.04))
-    for i, x in enumerate((-0.06, -0.02, 0.02, 0.06)):
-        blob(f"ltooth{i}", "ink", jaw, (x, -0.26, -0.02), (0.005, 0.02, 0.026))
+    cone("nose", "ink", head, (0, -0.27, 0.165), 0.035, 0.0, 0.05, rot=(180, 0, 0))
+    box("mouth", "socket", head, (0, -0.17, 0.03), (0.2, 0.06, 0.18))
+    teeth("upperteeth", head, (0, -0.205, 0.1))
+    box("bite", "ink", head, (0, -0.214, 0.065), (0.2, 0.01, 0.024))      # the bite line under the top teeth
+    jaw = J["jaw"] = joint("jaw", head, (0, -0.05, 0.06))
+    teeth("lowerteeth", jaw, (0, -0.155, -0.042))
+    blob("mandible", "bone", jaw, (0, -0.09, -0.1), (0.12, 0.07, 0.035))
 
     # Arms: shoulder and elbow face the camera; hand at the wrist.
     for side, name in ((-1, "R"), (1, "L")):
@@ -198,17 +221,14 @@ REST = merge(arm("R", 8), arm("L", 8), legs_pose(0))
 
 
 def show():
-    """Preview poses. The near arm is L (screen-right); + angles swing forward
-    (screen-left, the way he faces), so the near arm reaches up-and-out with -."""
+    """Preview poses (near arm is L, screen-right; + angles swing forward)."""
     lib.ACTIONS.clear()
     action("rest", 1, [(0, REST)])
-    action("sit", 1, [(0, merge(REST, legs_pose(2.5), body_tilt(-40), arm("R", 20, 30), arm("L", -10)))])
-    action("lie", 1, [(0, merge(REST, legs_pose(3), body_tilt(-90), arm("R", -100, -120), arm("L", -130, -110)))])
-    action("lie_look", 1, [(0, merge(REST, legs_pose(3), body_tilt(-90), P(head={"r": (24, 0, 20)}),
-                                     arm("R", 30, 20), arm("L", -30)))])
-    action("pickup", 1, [(0, merge(REST, legs_pose(1), P(hips={"r": (22, 0, 0)}, head={"r": (30, 0, 0)}),
-                                   arm("R", 25, 15, "fist")))])
-    action("lookat", 1, [(0, merge(REST, arm("R", 115, 115, "fist"), P(head={"r": (-6, 0, 0)})))])
+    action("jaw10", 1, [(0, merge(REST, P(jaw={"r": (10, 0, 0)})))])
+    action("jaw24", 1, [(0, merge(REST, P(jaw={"r": (24, 0, 0)})))])
+    action("jaw44", 1, [(0, merge(REST, P(jaw={"r": (44, 0, 0)})))])
+    action("lookyou", 1, [(0, merge(REST, P(head={"r": (0, 31, 45)}, jaw={"r": (16, 0, 0)})))])
+    action("down", 1, [(0, merge(REST, P(head={"r": (24, 0, 0)})))])
 
 
 def secondary(act, f):

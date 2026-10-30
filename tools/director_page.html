@@ -72,6 +72,21 @@ details.prompt pre { white-space: pre-wrap; font: 13px/1.55 var(--mono); color: 
 .raw { font: 12px/1.5 var(--mono); color: var(--muted); overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
 .ok { color: var(--glow); font-weight: 600; }
 .cols .c-board, .tag.board { color: var(--dusk); }
+.live { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; }
+.round { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
+.round label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
+.round select { font: 14px var(--body); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--fg); }
+.round button { font: 600 14px var(--body); padding: 8px 14px; border-radius: 8px; border: 1px solid var(--fg);
+  background: var(--fg); color: var(--bg); cursor: pointer; }
+.round button#stop { background: transparent; color: var(--fg); }
+.round button:disabled { opacity: 0.45; cursor: default; }
+.round :focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+.status { margin: 0; font-size: 14px; color: var(--muted); }
+.status.running { color: var(--glow); }
+.row.fresh { animation: fresh 1.2s ease-out; }
+@keyframes fresh { from { box-shadow: 0 0 0 3px color-mix(in srgb, var(--glow) 50%, transparent); } to { box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { .row.fresh { animation: none; } }
 @media (max-width: 640px) {
   .cols { display: none; }
   .row { grid-template-columns: 1fr; }
@@ -88,6 +103,21 @@ details.prompt pre { white-space: pre-wrap; font: 13px/1.55 var(--mono); color: 
       &ldquo;applied&rdquo; means the board took it.</p>
     <div class="run" id="run"></div>
   </header>
+
+  <section class="live" id="live" hidden>
+    <form id="round" class="round">
+      <label>Character
+        <select id="character"><option value="skeleton">Skeleton</option><option value="jay">Jay</option></select></label>
+      <label>Scene
+        <select id="scene"><option value="graveyard">Graveyard</option><option value="forest">Forest</option></select></label>
+      <label>Director
+        <select id="backend"><option value="claude">Claude (Haiku 5.5)</option><option value="rules">Rules (offline)</option></select></label>
+      <button type="submit" id="start">Start a fresh round</button>
+      <button type="button" id="stop" disabled>Stop</button>
+    </form>
+    <p class="status" id="status" role="status">Ready. A round runs about 100 seconds: it starts asleep, you wake it,
+      play a set, stop, it falls asleep, and a hit wakes it again.</p>
+  </section>
 
   <section class="stats" id="stats" aria-label="The run in numbers"></section>
 
@@ -119,18 +149,56 @@ const DATA = /*DATA*/null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const MOOD = { Asleep: "asleep", Curious: "quiet / curious", IntoIt: "grooving", Hyped: "hyped" };
+let entries = DATA.entries || [];
+let onlySpoke = false;
+let seen = 0;
 
-function header() {
-  const s = DATA.start || {};
-  const first = DATA.rows[0]?.summary || {};
+// Group the raw log into moments: each board summary, with what the director did about it.
+function build(entries) {
+  const start = entries.find((e) => e.type === "start") || {};
+  const prompts = entries.filter((e) => e.type === "prompt");
+  const applied = new Set(entries.filter((e) => e.type === "applied").map((e) => e.line));
+  const rows = [], byT = new Map();
+  for (const e of entries) {
+    if (e.type === "summary") {
+      const r = { summary: e, status: "regular" };
+      rows.push(r);
+      byT.set(e.t, r);
+      continue;
+    }
+    const r = byT.get(e.t);
+    if (!r) continue;
+    if (e.type === "skipped") { r.status = "held"; r.why = e.why; }
+    else if (e.type === "reply") { r.reply = e; r.status = "asked"; }
+    else if (e.type === "sent") { r.sent = e.line; r.status = "spoke"; r.applied = applied.has(e.line); }
+    else if (e.type === "quiet") { r.status = "quiet"; }
+    else if (e.type === "error") { r.status = "error"; r.why = e.error; }
+  }
+  const replies = rows.filter((r) => r.reply).map((r) => r.reply);
+  const ms = replies.map((x) => x.ms).sort((a, b) => a - b);
+  const stats = {
+    summaries: rows.length,
+    asked: start.backend === "claude" ? replies.length : rows.filter((r) => r.status === "spoke" || r.status === "quiet").length,
+    spoke: rows.filter((r) => r.status === "spoke").length,
+    quiet: rows.filter((r) => r.status === "quiet").length,
+    held: rows.filter((r) => r.status === "held").length,
+    median_ms: ms.length ? ms[Math.floor(ms.length / 2)] : null,
+    tokens_in: replies.reduce((a, x) => a + (x.tokens?.in || 0), 0),
+    tokens_out: replies.reduce((a, x) => a + (x.tokens?.out || 0), 0),
+  };
+  return { start, prompt: prompts[prompts.length - 1], rows, stats };
+}
+
+function header(b) {
+  const s = b.start;
+  const first = b.rows[0]?.summary || {};
   $("run").innerHTML = [
-    `character: ${esc(first.character || "?")}`,
-    `director: ${esc(s.backend || "?")}${s.model ? " (" + esc(s.model) + ")" : ""}`,
-    `keys: ${esc(s.keys || "-")}`,
-    `held back unless ${esc(s.quiet_s ?? "?")} s had passed or something happened`,
-    `log: ${esc(DATA.name)}`,
-  ].map((x) => `<span>${x}</span>`).join("");
-  const st = DATA.stats;
+    `character: ${esc(first.character || "-")}`,
+    `director: ${esc(s.backend || "-")}${s.model ? " (" + esc(s.model) + ")" : ""}`,
+    s.quiet_s ? `speaks at most every ${esc(s.quiet_s)} s, except at moments` : "",
+    DATA.name ? `log: ${esc(DATA.name)}` : "",
+  ].filter(Boolean).map((x) => `<span>${x}</span>`).join("");
+  const st = b.stats;
   const tiles = [
     ["", st.summaries, "moments reported"],
     ["", st.asked, "times it asked the model"],
@@ -141,8 +209,8 @@ function header() {
     ["", st.tokens_in ? `${(st.tokens_in / 1000).toFixed(1)}k / ${st.tokens_out}` : "-", "tokens in / out"],
   ];
   $("stats").innerHTML = tiles.map(([cls, v, label]) => `<div class="stat ${cls}"><b>${esc(v)}</b><span>${esc(label)}</span></div>`).join("");
-  if (DATA.prompt) $("prompt").textContent = DATA.prompt.system;
-  else $("prompt-box").hidden = true;
+  $("prompt-box").hidden = !b.prompt;
+  if (b.prompt) $("prompt").textContent = b.prompt.system;
 }
 
 function parseSent(line) {
@@ -165,11 +233,13 @@ function directorCell(r) {
     if (d.look) tags.push(`<span class="tag dir">looks at you</span>`);
     if (d.intent) tags.push(`<span class="tag dir">wants: ${esc(d.intent)}</span>`);
     if (d.for) tags.push(`<span class="tag plain">for ${esc(d.for / 1000)} s</span>`);
-    tags.push(r.applied ? `<span class="tag plain ok">applied ✓</span>` : `<span class="tag plain">not confirmed</span>`);
+    tags.push(r.applied ? `<span class="tag plain ok">applied ✓</span>` : `<span class="tag plain">not confirmed yet</span>`);
     if (d.thought) parts.push(`<div class="thought claude">${esc(d.thought)}</div>`);
     parts.push(`<div class="tags">${tags.join("")}</div>`);
   } else if (r.status === "quiet") {
     parts.push(`<div class="tags"><span class="tag plain">asked, stayed quiet</span></div>`);
+  } else if (r.status === "asked") {
+    parts.push(`<div class="tags"><span class="tag plain">thinking…</span></div>`);
   } else {
     parts.push(`<div class="note">-</div>`);
   }
@@ -177,31 +247,77 @@ function directorCell(r) {
   return parts.join("");
 }
 
-function render(onlySpoke) {
-  $("timeline").innerHTML = DATA.rows
-    .filter((r) => !onlySpoke || r.status === "spoke")
-    .map((r) => {
-      const s = r.summary;
-      const tags = [`<span class="tag board">${esc(MOOD[s.mood] || s.mood)}</span>`];
-      if (s.moment) tags.push(`<span class="tag moment">${esc(s.moment)}</span>`);
-      if (s.notes || s.hits) tags.push(`<span class="tag plain">${s.notes} notes${s.hits ? ", " + s.hits + " hits" : ""}</span>`);
-      if (!s.notes && s.silence_s > 1) tags.push(`<span class="tag plain">silent ${Math.round(s.silence_s)} s</span>`);
-      return `<article class="row ${r.status}">
-        <div class="time">${(s.t / 1000).toFixed(1)}s</div>
-        <div class="voice board"><div class="tags">${tags.join("")}</div><div class="thought pet">${esc(s.thought)}</div>
-          <div class="note">familiarity ${esc(s.familiarity)}</div></div>
-        <div class="voice dir">${directorCell(r)}</div>
-      </article>`;
-    }).join("");
+function render() {
+  const b = build(entries);
+  header(b);
+  let rows = b.rows.filter((r) => !onlySpoke || r.status === "spoke");
+  if (DATA.live) rows = rows.slice().reverse();                     // live: newest first
+  const fresh = b.rows.length > seen ? b.rows[b.rows.length - 1] : null;
+  seen = b.rows.length;
+  $("timeline").innerHTML = rows.map((r) => {
+    const s = r.summary;
+    const tags = [`<span class="tag board">${esc(MOOD[s.mood] || s.mood)}</span>`];
+    if (s.moment) tags.push(`<span class="tag moment">${esc(s.moment)}</span>`);
+    if (s.notes || s.hits) tags.push(`<span class="tag plain">${s.notes} notes${s.hits ? ", " + s.hits + " hits" : ""}</span>`);
+    if (!s.notes && s.silence_s > 1) tags.push(`<span class="tag plain">silent ${Math.round(s.silence_s)} s</span>`);
+    return `<article class="row ${r.status}${DATA.live && r === fresh ? " fresh" : ""}">
+      <div class="time">${(s.t / 1000).toFixed(1)}s</div>
+      <div class="voice board"><div class="tags">${tags.join("")}</div><div class="thought pet">${esc(s.thought)}</div>
+        <div class="note">familiarity ${esc(s.familiarity)}</div></div>
+      <div class="voice dir">${directorCell(r)}</div>
+    </article>`;
+  }).join("") || `<p class="note">${DATA.live ? "Nothing yet. Start a round and the moments appear here as the board reports them." : "This log has no moments."}</p>`;
 }
 
-function select(onlySpoke) {
-  $("show-all").setAttribute("aria-pressed", String(!onlySpoke));
-  $("show-spoke").setAttribute("aria-pressed", String(onlySpoke));
-  render(onlySpoke);
+function select(spoke) {
+  onlySpoke = spoke;
+  $("show-all").setAttribute("aria-pressed", String(!spoke));
+  $("show-spoke").setAttribute("aria-pressed", String(spoke));
+  render();
 }
 $("show-all").addEventListener("click", () => select(false));
 $("show-spoke").addEventListener("click", () => select(true));
-header();
-render(false);
+
+// Live (served by tools/director.py --serve): start rounds and watch them unfold.
+if (DATA.live) {
+  $("live").hidden = false;
+  let polling = null;
+  const setRunning = (state) => {
+    $("start").disabled = state.running;
+    $("stop").disabled = !state.running;
+    const st = $("status");
+    st.classList.toggle("running", state.running);
+    if (state.running) st.textContent = `Running: ${Math.round(state.elapsed)} s of about ${Math.round(state.duration)} s.`;
+    else if (state.error) st.textContent = `Couldn't run: ${state.error}`;
+    else if (entries.length) st.textContent = "Round finished. Start another whenever you like.";
+  };
+  const poll = async () => {
+    try {
+      const res = await fetch(`events?since=${entries.length}`);
+      const data = await res.json();
+      if (data.reset) entries = [];
+      if (data.entries.length || data.reset) { entries = entries.concat(data.entries); render(); }
+      setRunning(data);
+      if (!data.running && polling) { clearInterval(polling); polling = null; }
+    } catch (e) {
+      $("status").textContent = "Lost touch with the director on this Mac. Is tools/director.py --serve still running?";
+    }
+  };
+  $("round").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const body = { character: $("character").value, scene: $("scene").value, backend: $("backend").value };
+    $("status").textContent = "Starting: waking the board…";
+    $("start").disabled = true;
+    const res = await fetch("start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.error) { $("status").textContent = `Couldn't start: ${data.error}`; $("start").disabled = false; return; }
+    entries = [];
+    seen = 0;
+    render();
+    if (!polling) polling = setInterval(poll, 700);
+  });
+  $("stop").addEventListener("click", () => fetch("stop", { method: "POST" }));
+  poll();
+}
+render();
 </script>

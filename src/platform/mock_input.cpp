@@ -24,14 +24,15 @@ void MockInput::key(char c, uint32_t now) {
     case '+': base_ = fminf(1.0f, base_ + 0.1f); break;
     case '-': base_ = fmaxf(0.0f, base_ - 0.1f); break;
     case '0': base_ = 0; lift_ = 0; break;
-    case '1': case '2': case '3': case '4': runScript(c - '1', now); break;
+    case '1': case '2': case '3': case '4': case '5': runScript(c - '1', now); break;
     case 'd': hud_ = true; break;
     case 't': telemetry_ = true; break;
     case 'r': reset_ = true; break;
     case 'n': nextChar_ = true; break;    // next character pack
     case 'b': nextScene_ = true; break;   // next scene (backdrop)
     case 'x': forget_ = true; break;      // forget the player (memory wiped)
-    case 'g': director_ = true; break;    // director mode on/off (summaries out, suggestions in)
+    case 'g': director_ = 1; break;       // director mode on (summaries out, suggestions in)
+    case 'G': director_ = 2; break;       // ... off
     default: break;  // includes \r and \n from the serial monitor
   }
 }

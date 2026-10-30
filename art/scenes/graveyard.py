@@ -20,11 +20,17 @@ GROUND_Y = 113
 FEET_Y = 124
 
 C = {
-    "sky_top":    (64, 52, 98),
+    "sky_top":    (54, 44, 88),
+    "sky_2":      (74, 58, 110),
     "sky_mid":    (98, 74, 124),
-    "sky_low":    (158, 106, 132),
+    "sky_low":    (136, 92, 130),
+    "sky_glow":   (176, 116, 136),
+    "star":       (232, 226, 250),
     "moon":       (246, 234, 196),
     "moon_dk":    (226, 210, 168),
+    "halo":       (122, 100, 150),
+    "cloud":      (84, 66, 116),
+    "far":        (66, 56, 94),
     "hills":      (74, 64, 102),
     "hills2":     (60, 54, 86),
     "fence":      (44, 38, 62),
@@ -51,35 +57,95 @@ def headstone(x, top, w, h):
     return [circle(x + r, top + r, r), rect(x, top + r, x + w - 1, top + h)]
 
 
+def limb(points, r0, r1):
+    """A tapering limb along a polyline: radius r0 at the start to r1 at the end."""
+    def shape(d):
+        segs = list(zip(points, points[1:]))
+        total = sum(((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5 for a, b in segs) or 1
+        done = 0.0
+        for a, b in segs:
+            length = ((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5
+            steps = max(1, int(length * 2))
+            for k in range(steps + 1):
+                u = k / steps
+                x, y = a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u
+                r = r0 + (r1 - r0) * (done + length * u) / total
+                d.ellipse([x - r, y - r, x + r, y + r], fill=255)
+            done += length
+    return shape
+
+
+def dither(d, y0, y1, upper, lower):
+    """Blend two sky bands over rows y0..y1 with an ordered (checker -> sparse) dither."""
+    rows = y1 - y0
+    for i, y in enumerate(range(y0, y1)):
+        u = (i + 1) / (rows + 1)                       # share of the lower colour
+        for x in range(W):
+            bayer = ((x % 2) * 2 + (y % 2) * 3) % 4 / 4 + 0.125
+            d.point((x, y), fill=lower if bayer < u else upper)
+
+
 def draw(seed=11):
     rnd = random.Random(seed)
     img = Image.new("RGB", (W, H), C["sky_top"])
     d = ImageDraw.Draw(img)
 
-    # Dusk in bands (flat steps, not a smooth gradient: it suits the ink style).
-    for y0, col in ((34, C["sky_mid"]), (70, C["sky_low"])):
-        d.rectangle([0, y0, W - 1, H - 1], fill=col)
+    # Dusk: flat bands blended with pixel dithering, a glow low on the horizon.
+    bands = [(0, C["sky_top"]), (22, C["sky_2"]), (44, C["sky_mid"]), (66, C["sky_low"]), (82, C["sky_glow"])]
+    for (y0, col), nxt in zip(bands, bands[1:] + [(H, None)]):
+        d.rectangle([0, y0, W - 1, nxt[0] - 1], fill=col)
+    for (y0, upper), (y1, lower) in zip(bands, bands[1:]):
+        dither(d, y1 - 3, y1 + 3, upper, lower)
 
-    # Big moon, a couple of craters.
+    # Stars in the upper sky; two brighter ones with little cross glints.
+    for _ in range(18):
+        x, y = rnd.randrange(W), rnd.randrange(0, 40)
+        if not (98 < x < 140 and y < 56):
+            d.point((x, y), fill=C["star"])
+    for x, y in ((58, 12), (150, 26)):
+        for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
+            d.point((x + dx, y + dy), fill=C["star"])
+
+    # The moon: a soft halo, craters, and a thin cloud drifting across it.
+    layer(img, [circle(118, 34, 22)], C["halo"])
     layer(img, [circle(118, 34, 18)], C["moon"])
     layer(img, [circle(112, 30, 4), circle(124, 40, 3), circle(121, 27, 2)], C["moon_dk"])
+    layer(img, [lambda dd: dd.rounded_rectangle([90, 40, 134, 43], 2, fill=255),
+                lambda dd: dd.rounded_rectangle([104, 45, 150, 47], 1, fill=255)], C["cloud"])
 
-    # Rolling hills, then an iron fence across the back.
+    # Far off: hills, a little chapel and a few pines on the horizon.
     layer(img, [circle(x, 112, r) for x, r in ((8, 30), (54, 22), (96, 26), (140, 28), (172, 30))], C["hills"])
+    chapel = [rect(84, 80, 96, 96), lambda dd: dd.polygon([(83, 80), (90, 73), (97, 80)], fill=255),
+              rect(89, 66, 91, 74), rect(87, 68, 93, 69)]
+    pines = [lambda dd, x=x, h=h: dd.polygon([(x - 4, 96), (x, 96 - h), (x + 4, 96)], fill=255)
+             for x, h in ((66, 14), (72, 10), (104, 12), (110, 16))]
+    layer(img, chapel + pines, C["far"])
     layer(img, [circle(x, 120, r) for x, r in ((-8, 20), (30, 16), (70, 18), (110, 14), (150, 20))], C["hills2"])
+
+    # The iron fence across the back.
     d.line([(0, 98), (W - 1, 98)], fill=C["fence"])
     d.line([(0, 104), (W - 1, 104)], fill=C["fence"])
     for x in range(2, W, 6):
         d.line([(x, 94), (x, GROUND_Y)], fill=C["fence"])
         d.point((x, 93), fill=C["fence"])
 
-    # A crooked bare tree on the left, branches running off the top.
-    trunk = [rect(10, 40, 17, GROUND_Y + 1), rect(13, 20, 16, 44)]
-    branches = []
-    for (x0, y0, x1, y1, w) in ((15, 46, 34, 30, 3), (14, 34, 2, 18, 3), (16, 26, 26, 6, 2), (31, 32, 40, 26, 2),
-                                (6, 22, 0, 12, 2)):
-        branches.append(lambda dd, a=(x0, y0, x1, y1, w): dd.line([a[:2], a[2:4]], fill=255, width=a[4]))
-    layer(img, trunk + branches, C["tree"], C["tree_line"])
+    # A gnarled old tree on the left: flared roots, a leaning trunk, limbs that
+    # taper to twigs (running off the top), and a knot hole.
+    tree = [
+        limb([(14, GROUND_Y + 2), (15, 80), (13, 56), (16, 34), (14, 14)], 6.5, 2.5),      # trunk
+        limb([(6, GROUND_Y + 1), (11, GROUND_Y - 4)], 2.5, 3.5),                          # roots
+        limb([(25, GROUND_Y + 1), (18, GROUND_Y - 5)], 2.5, 3.5),
+        limb([(15, 60), (26, 50), (34, 40), (44, 36)], 3, 1),                            # long limb right
+        limb([(34, 40), (38, 30), (36, 22)], 1.5, 0.6),
+        limb([(14, 46), (6, 38), (1, 30)], 2.5, 1),                                      # limb left
+        limb([(15, 34), (24, 22), (30, 10), (28, 0)], 2, 0.7),                           # upper right
+        limb([(14, 24), (8, 12), (9, 0)], 1.6, 0.6),                                     # upper left
+        limb([(24, 22), (32, 20), (38, 14)], 1, 0.5),
+    ]
+    layer(img, tree, C["tree"], C["tree_line"])
+    layer(img, [circle(15, 70, 1.6)], C["tree_line"])                                     # knot hole
+    for x0, y0, x1, y1 in ((44, 36, 48, 33), (44, 36, 47, 39), (36, 22, 39, 18), (38, 14, 41, 11), (1, 30, -1, 26)):
+        d.line([(x0, y0), (x1, y1)], fill=C["tree_line"])                                # twigs
 
     # Headstones and a cross at the edges of the clearing.
     layer(img, headstone(124, 92, 12, 21) + headstone(140, 98, 10, 15) + headstone(26, 96, 10, 17),

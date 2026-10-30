@@ -64,11 +64,34 @@ static const ScriptEntry SCRIPT_QUIET[] = {
   {20000, 'p', 5, 20000 },
 };
 
+// 5: a director round (~100 s): woken, a set that gets wild, then silence: it
+// misses you, gets bored and falls asleep; a hit out of nowhere wakes it again.
+static const ScriptEntry SCRIPT_ROUND[] = {
+  {    0, '0',  1,    0 },
+  { 3000, 'p',  1,    0 },  // wakes it
+  { 4000, '+',  2,    0 },
+  { 4000, 'p', 20,  500 },
+  {14000, '+',  3, 1000 },
+  {14000, 'P', 24,  250 },
+  {20000, '+',  4,  500 },
+  {20000, 'f',  4,  600 },
+  {24000, 'h',  1,    0 },
+  {25000, 'P', 16,  250 },
+  {29500, 'c',  1,    0 },
+  {31000, 's',  1,    0 },
+  {35000, 'S',  1,    0 },
+  {36000, '0',  1,    0 },  // silence: misses you, gets bored, sleeps (~80 s)
+  {88000, 'h',  1,    0 },  // woken with a jolt
+  {89000, 'p',  8,  400 },
+  {93000, '0',  1,    0 },
+};
+
 #define SCRIPT_LEN(a) (uint8_t)(sizeof(a) / sizeof(a[0]))
 static const Script SCRIPTS[] = {
   {SCRIPT_SET,      SCRIPT_LEN(SCRIPT_SET)},
   {SCRIPT_PRIORITY, SCRIPT_LEN(SCRIPT_PRIORITY)},
   {SCRIPT_HOLDS,    SCRIPT_LEN(SCRIPT_HOLDS)},
   {SCRIPT_QUIET,    SCRIPT_LEN(SCRIPT_QUIET)},
+  {SCRIPT_ROUND,    SCRIPT_LEN(SCRIPT_ROUND)},
 };
 constexpr int SCRIPT_COUNT = sizeof(SCRIPTS) / sizeof(SCRIPTS[0]);

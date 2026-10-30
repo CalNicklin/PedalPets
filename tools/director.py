@@ -6,9 +6,13 @@
 """The director: a slow, optional mind for the pet, running on this computer.
 
 Usage:
-  uv run tools/director.py [--backend rules|claude] [--keys n4] [--seconds 120] [--log run.jsonl] [--port ...]
+  uv run tools/director.py --serve                    a page on http://localhost:8765 to start rounds and watch them
+  uv run tools/director.py [--backend rules|claude] [--character skeleton] [--scene graveyard]
+                           [--seconds 105] [--log run.jsonl] [--port ...]
 
-Turns on the board's director mode (`g`), then for every summary the board
+A round resets the board (asleep), picks the character and scene, turns on
+director mode (`g`) and plays round 5 (woken, a set, silence, asleep, woken
+again). For every summary the board
 sends ("S,{json}" every 6 s, and at once on a moment: a hit, waking, the music
 stopping) decides whether to suggest anything, and sends it back as one
 "#D ..." line (see src/core/directive.h). It speaks sparingly: at most every
@@ -39,7 +43,7 @@ INTENTS = ["None", "Watch", "Bored", "WantsYou", "Investigate"]
 SUGGESTIBLE = ["Bored", "WantsYou"]   # the others come from what it sees (a leaf); only while it's quiet
 THOUGHT_MAX = 39
 QUIET_S = 18
-MODEL = "claude-haiku-4-5"
+MODEL = "claude-haiku-5-5"   # newest Haiku (checked with models.list, 2026-10-30)
 KEY_FILE = os.path.expanduser("~/.config/pedalpets/anthropic_key")
 
 
@@ -151,88 +155,215 @@ class Claude:
         return True
 
 
+def api_key():
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        if not os.path.exists(KEY_FILE):
+            raise RuntimeError(f"the claude director needs ANTHROPIC_API_KEY or {KEY_FILE}")
+        os.environ["ANTHROPIC_API_KEY"] = open(KEY_FILE).read().strip()
+
+
+def run_round(port_name, character, scene, backend_name, seconds, log, stop=lambda: False):
+    """One round on the board: reset, pick the packs, director on, round 5, log it all."""
+    import serial
+    if backend_name == "claude":
+        api_key()
+    port = serial.Serial()
+    port.port, port.baudrate, port.timeout = port_name, 115200, 0.2
+    port.dtr = port.rts = False
+    port.open()
+    lock = threading.Lock()
+    lines_in = []
+
+    def read_lines(until, timeout=4.0):
+        """Read lines until one matches until(line) (returns it) or the timeout."""
+        pending, t0 = b"", time.time()
+        while time.time() - t0 < timeout:
+            pending += port.read(1024)
+            *done, pending = pending.split(b"\n")
+            for raw in done:
+                line = raw.decode(errors="replace").strip()
+                lines_in.append(line)
+                if until(line):
+                    return line
+        return None
+
+    def packs_line():
+        return read_lines(lambda l: l.startswith("character:"))
+
+    try:
+        read_lines(lambda l: "ready" in l, 6)             # opening the port may reboot it
+        port.write(b"G")                                   # director off while we set up
+        port.write(b"r")                                   # asleep, fresh
+        line = packs_line()
+        for key, want, field in ((b"n", character, 1), (b"b", scene, 3)):
+            for _ in range(4):
+                if not line or not want or line.split()[field] == want:
+                    break
+                port.write(key)
+                line = packs_line()
+        if line and ((character and line.split()[1] != character) or (scene and line.split()[3] != scene)):
+            raise RuntimeError(f"the board has no {character} / {scene} ({line})")
+
+        state = {"moves": [], "character": character, "last_said": -1e9}
+
+        def send(d, summary):
+            out = to_line(d, state["moves"], summary.get("mood"))
+            log({"type": "sent" if out else "quiet", "t": summary["t"], "line": out})
+            if out:
+                state["last_said"] = summary["t"] / 1000
+                with lock:
+                    port.write((out + "\n").encode())
+
+        backend = Rules() if backend_name == "rules" else None
+        log({"type": "start", "backend": backend_name, "model": MODEL if backend_name == "claude" else None,
+             "character": character, "scene": scene, "quiet_s": QUIET_S})
+        port.write(b"g5")                                  # director on, play the round
+        pending, t0 = b"", time.time()
+        while time.time() - t0 < seconds and not stop():
+            pending += port.read(4096)
+            *lines, pending = pending.split(b"\n")
+            for raw in lines:
+                line = raw.decode(errors="replace").strip()
+                if line.startswith("M,"):
+                    state["character"], *state["moves"] = line[2:].split(",")
+                    if backend_name == "claude":
+                        backend = Claude(state["character"], state["moves"])
+                        log({"type": "prompt", "character": state["character"], "system": backend.system})
+                elif line.startswith("S,"):
+                    try:
+                        summary = json.loads(line[2:])
+                    except ValueError:
+                        continue
+                    log({"type": "summary", **summary})
+                    moment = summary.get("moment") or ""
+                    print(f"{summary['t'] / 1000:7.1f}s  {summary['mood']:<7} {moment:<13} {summary['thought']}")
+                    # Speak sparingly: at moments, or when it's been quiet a while.
+                    if not moment and summary["t"] / 1000 - state["last_said"] < QUIET_S:
+                        log({"type": "skipped", "t": summary["t"], "why": f"said something < {QUIET_S} s ago"})
+                        continue
+                    if isinstance(backend, Rules):
+                        send(backend.decide(summary, state["moves"]), summary)
+                    elif backend:
+                        backend.decide_async(summary, state["moves"], send, log)
+                elif line.startswith("directed:"):
+                    log({"type": "applied", "line": line[len("directed: "):]})
+                    print(f"  ok {line[len('directed: '):]}")
+        log({"type": "end", "stopped": bool(stop())})
+    finally:
+        try:
+            port.write(b"G0")                              # director off, music off
+        finally:
+            port.close()
+
+
+def serve(port_name, http_port=8765):
+    """A local page to start rounds and watch the director work, live."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from urllib.parse import parse_qs, urlparse
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import director_page
+
+    page = director_page.render({"entries": [], "name": "", "live": True},
+                                open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "director_page.html")).read())
+    st = {"entries": [], "running": False, "started": 0.0, "duration": 105.0, "error": None, "stop": False}
+    lock = threading.Lock()
+
+    def start(character, scene, backend):
+        with lock:
+            if st["running"]:
+                return "a round is already running"
+            st.update(entries=[], running=True, started=time.time(), error=None, stop=False)
+        path = os.path.join(".pio", "director", time.strftime("%Y%m%d-%H%M%S") + ".jsonl")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        f = open(path, "w")
+
+        def log(entry):
+            with lock:
+                st["entries"].append(entry)
+                f.write(json.dumps(entry) + "\n")
+                f.flush()
+
+        def go():
+            try:
+                run_round(port_name, character, scene, backend, st["duration"], log, lambda: st["stop"])
+            except Exception as e:
+                st["error"] = str(e)
+                print(f"director: {e}", file=sys.stderr)
+            finally:
+                f.close()
+                st["running"] = False
+                print(f"director: log in {path}")
+        threading.Thread(target=go, daemon=True).start()
+        return None
+
+    class Handler(BaseHTTPRequestHandler):
+        def reply(self, body, kind="application/json"):
+            data = body.encode() if isinstance(body, str) else body
+            self.send_response(200)
+            self.send_header("Content-Type", kind)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self):
+            url = urlparse(self.path)
+            if url.path == "/":
+                return self.reply(page, "text/html; charset=utf-8")
+            if url.path == "/events":
+                since = int(parse_qs(url.query).get("since", ["0"])[0])
+                with lock:
+                    reset = since > len(st["entries"])
+                    new = st["entries"][0 if reset else since:]
+                    return self.reply(json.dumps({"entries": new, "reset": reset, "running": st["running"],
+                                                  "elapsed": time.time() - st["started"] if st["running"] else 0,
+                                                  "duration": st["duration"], "error": st["error"]}))
+            self.send_error(404)
+
+        def do_POST(self):
+            if self.path == "/start":
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+                err = start(body.get("character"), body.get("scene"), body.get("backend", "claude"))
+                return self.reply(json.dumps({"error": err}))
+            if self.path == "/stop":
+                st["stop"] = True
+                return self.reply(json.dumps({"ok": True}))
+            self.send_error(404)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", http_port), Handler)
+    print(f"director: open http://localhost:{http_port}  (Ctrl+C to quit)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", default="/dev/cu.usbserial-10")
-    ap.add_argument("--backend", choices=["rules", "claude"], default="rules")
-    ap.add_argument("--keys", default="", help="keys to send after director mode is on (e.g. n4)")
-    ap.add_argument("--seconds", type=float, default=120)
+    ap.add_argument("--serve", action="store_true", help="a local page to start rounds and watch them")
+    ap.add_argument("--http-port", type=int, default=8765)
+    ap.add_argument("--backend", choices=["rules", "claude"], default="claude")
+    ap.add_argument("--character", default="skeleton")
+    ap.add_argument("--scene", default="graveyard")
+    ap.add_argument("--seconds", type=float, default=105)
     ap.add_argument("--log", help="JSONL log of the run (default .pio/director/<time>.jsonl)")
     a = ap.parse_args()
-    if a.backend == "claude" and not os.environ.get("ANTHROPIC_API_KEY"):
-        if not os.path.exists(KEY_FILE):
-            sys.exit(f"director: the claude backend needs ANTHROPIC_API_KEY or {KEY_FILE}")
-        os.environ["ANTHROPIC_API_KEY"] = open(KEY_FILE).read().strip()
-
-    log_path = a.log or os.path.join(".pio", "director", time.strftime("%Y%m%d-%H%M%S") + ".jsonl")
-    os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
-    log_file = open(log_path, "w")
-    lock = threading.Lock()
-
-    def log(entry):
-        with lock:
-            log_file.write(json.dumps(entry) + "\n")
-            log_file.flush()
-
-    import serial
-    port = serial.Serial()
-    port.port, port.baudrate, port.timeout = a.port, 115200, 0.2
-    port.dtr = port.rts = False
-    port.open()
-    buf, t0 = b"", time.time()
-    while b"ready" not in buf and time.time() - t0 < 8:
-        buf += port.read(256)
-    port.write(b"g" + a.keys.encode())
-
-    state = {"moves": [], "character": "the pet", "last_said": -1e9}
-
-    def send(d, summary):
-        line = to_line(d, state["moves"], summary.get("mood"))
-        log({"type": "sent" if line else "quiet", "t": summary["t"], "line": line})
-        if line:
-            state["last_said"] = summary["t"] / 1000
-            with lock:
-                port.write((line + "\n").encode())
-            print(f"  -> {line}")
-
-    backend = Rules() if a.backend == "rules" else None
-    log({"type": "start", "backend": a.backend, "model": MODEL if a.backend == "claude" else None,
-         "keys": a.keys, "quiet_s": QUIET_S})
-    pending, t0 = b"", time.time()
-    while time.time() - t0 < a.seconds:
-        pending += port.read(4096)
-        *lines, pending = pending.split(b"\n")
-        for raw in lines:
-            line = raw.decode(errors="replace").strip()
-            if line.startswith("M,"):
-                state["character"], *state["moves"] = line[2:].split(",")
-                print(f"director: {state['character']}, {len(state['moves'])} gestures ({a.backend})")
-                if a.backend == "claude":
-                    backend = Claude(state["character"], state["moves"])
-                    log({"type": "prompt", "character": state["character"], "system": backend.system})
-            elif line.startswith("S,"):
-                try:
-                    summary = json.loads(line[2:])
-                except ValueError:
-                    continue
-                log({"type": "summary", **summary})
-                moment = summary.get("moment") or ""
-                print(f"{summary['t'] / 1000:7.1f}s  {summary['mood']:<7} {moment:<13} {summary['thought']}")
-                # Speak sparingly: at moments, or when it's been quiet a while.
-                if not moment and summary["t"] / 1000 - state["last_said"] < QUIET_S:
-                    log({"type": "skipped", "t": summary["t"], "why": f"said something < {QUIET_S} s ago"})
-                    continue
-                if isinstance(backend, Rules):
-                    send(backend.decide(summary, state["moves"]), summary)
-                elif backend:
-                    backend.decide_async(summary, state["moves"], send, log)
-            elif line.startswith("directed:"):
-                log({"type": "applied", "line": line[len("directed: "):]})
-                print(f"  ok {line[len('directed: '):]}")
-    port.write(b"g")
-    port.close()
-    log_file.close()
-    print(f"director: log in {log_path}")
+    if a.serve:
+        return serve(a.port, a.http_port)
+    path = a.log or os.path.join(".pio", "director", time.strftime("%Y%m%d-%H%M%S") + ".jsonl")
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w") as f:
+        def log(entry):
+            f.write(json.dumps(entry) + "\n")
+            f.flush()
+        try:
+            run_round(a.port, a.character, a.scene, a.backend, a.seconds, log)
+        except RuntimeError as e:
+            sys.exit(f"director: {e}")
+    print(f"director: log in {path}")
 
 
 if __name__ == "__main__":

@@ -98,8 +98,8 @@ void setup() {
   prefs.begin("pedalpets", false);
   loadMemory();
   resetAll(millis());
-  Serial.println("PedalPets ready. Keys: p P h f s S w W c + - 0 | 1-4 scripts | n character | b scene | "
-                 "x forget me | g director | d HUD | t telemetry | r reset");
+  Serial.println("PedalPets ready. Keys: p P h f s S w W c + - 0 | 1-5 scripts | n character | b scene | "
+                 "x forget me | g/G director on/off | d HUD | t telemetry | r reset");
 }
 
 namespace {
@@ -118,8 +118,8 @@ void handleKey(char c, uint32_t now) {
     return;
   }
   mock.key(c, now);
-  if (mock.takeDirector()) {
-    directing = !directing;
+  if (int d = mock.takeDirector()) {
+    directing = d == 1;
     if (directing) {
       director.moves(line, sizeof(line), pet.character());
       Serial.println(line);
