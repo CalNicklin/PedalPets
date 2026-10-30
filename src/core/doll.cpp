@@ -29,7 +29,7 @@ void composeDoll(const DollTables& t, const DollPose& p, DollPlacement* out) {
       float v = 0;
       for (int c = 0; c < t.channelCount; c++)
         if (ax.sourceMask & (1u << c)) v += p.ch[c];
-      idx = idx * ax.count + nearest(t.axisValues + ax.firstValue, ax.count, v);
+      idx = idx * ax.count + nearest(t.axisValues + ax.firstValue, ax.count, v * 4);
     }
     uint16_t img = part.firstImage + idx;
     const DollImage& im = t.images[img];

@@ -12,8 +12,17 @@
 #include "core/eyes.h"
 #include "core/performer.h"
 #include "core/timing.h"
-#include "gen/pose_meta.h"
+#include "gen/pack.h"
 #include "platform/mock_input.h"
+#if PEDALPETS_DOLL
+#include "core/choreo.h"
+#include "core/doll.h"
+#include "core/mood.h"
+#include "gen/doll_meta.h"
+#include "gen/doll_moves.h"
+#else
+#include "gen/pose_meta.h"
+#endif
 
 namespace {
 struct KeyAt { char key; uint32_t at; };
@@ -42,22 +51,52 @@ int main(int argc, char** argv) {
   uint32_t duration = (uint32_t)strtoul(argv[2], nullptr, 10);
   uint32_t seed = argc > 3 ? (uint32_t)strtoul(argv[3], nullptr, 10) : 1;
 
-  Rng           rng(seed);
+  Rng       rng(seed);
+  MockInput mock;
+  mock.reset();
+  uint32_t tickCount = 0;
+#if PEDALPETS_DOLL
+  MoodModel     mood;
+  Choreographer choreo(doll_gen::CHOREO, rng);
+  DollPlacement out[doll_gen::PART_COUNT];
+  mood.reset(0);
+  choreo.reset(mood.mood(), 0);
+  printf("t_ms,mood,energy,reaction,frame_us");
+  for (int i = 0; i < doll_gen::PART_COUNT; i++) printf(",p%d_img,p%d_x,p%d_y", i, i, i);
+  printf("\n");
+#else
   Performer     performer(gen::ART, rng);
   Brain         brain(gen::ART, rng, performer);
   EyeController eyes(rng);
-  MockInput     mock;
-  mock.reset();
   brain.reset(0);
   eyes.reset(0);
-
   printf("t_ms,pose,eye,mood,energy,reaction,step,frame_us\n");
-  uint32_t tickCount = 0;
+#endif
   for (uint32_t now = TICK_MS; now <= duration; now += TICK_MS) {
     for (int i = 0; i < nkeys; i++)
       if (keys[i].at > now - TICK_MS && keys[i].at <= now) mock.key(keys[i].key, now);
     mock.tick(now);
     MusicEvent e;
+#if PEDALPETS_DOLL
+    while (mock.pop(now, e)) {
+      MoodChange c = mood.onEvent(e, now);
+      if (c == MoodChange::Woke) choreo.onMoodChange(c, mood.mood(), now);
+      else choreo.onEvent(e, mood.mood(), now);
+    }
+    MoodChange c = mood.tick(mock.features(now), now);
+    if (c != MoodChange::None) choreo.onMoodChange(c, mood.mood(), now);
+    if (++tickCount % TICKS_PER_FRAME == 0) {
+      choreo.tick(mood.mood(), mood.energy(), now);
+      composeDoll(doll_gen::DOLL, choreo.pose(), out);
+      int rx = choreo.reaction();
+      printf("%u,%d,%.3f,%s,", now, (int)mood.mood(), mood.energy(), rx >= 0 ? doll_gen::MOVE_NAMES[rx] : "-");
+      for (int i = 0; i < doll_gen::PART_COUNT; i++) printf(",%u,%d,%d", out[i].image, out[i].x, out[i].y);
+      if (getenv("PEDALPETS_CHANNELS")) {   // debug: raw channel values after the parts
+        for (int c = 0; c < doll_gen::CHANNEL_COUNT; c++) printf(",%s=%.1f", doll_gen::CHANNEL_NAMES[c], choreo.pose().ch[c]);
+      }
+      printf("\n");
+    }
+#else
     while (mock.pop(now, e)) brain.onEvent(e, now);
     brain.tick(mock.features(now), now);
     eyes.tick(brain.mood(), performer.eyes(), now);
@@ -66,6 +105,7 @@ int main(int argc, char** argv) {
              brain.energy(), performer.playing() ? gen::REACTION_IDS[performer.reaction()] : "-",
              performer.step());
     }
+#endif
   }
   return 0;
 }

@@ -17,21 +17,39 @@ def rng(lo, hi, step):
     return [lo + i * step for i in range(int(round((hi - lo) / step)) + 1)]
 
 
-# Discrete axes are numbered so every channel is a number the device can add
-# up; the nearest value picks the image.
-SHAPES = {          # squash channel -> body scale x, y, z
+# Discrete-looking axes are numbered so every channel is a number the device
+# can add up; the nearest value picks the image. Squash and leg bend step in
+# quarters (about a pixel each) so crouches and squashes move smoothly.
+def lerp_table(keys, step):
+    """{value: (label, scale)} at every `step`, interpolating the key scales."""
+    out = {}
+    ks = sorted(keys)
+    v = ks[0]
+    while v <= ks[-1] + 1e-9:
+        lo = max(k for k in ks if k <= v + 1e-9)
+        hi = min(k for k in ks if k >= v - 1e-9)
+        u = 0 if hi == lo else (v - lo) / (hi - lo)
+        a, b = keys[lo][1], keys[hi][1]
+        out[round(v, 2)] = (f"{keys[lo][0]}+{u:.2f}" if u else keys[lo][0],
+                            tuple(x + (y - x) * u for x, y in zip(a, b)))
+        v += step
+    return out
+
+
+SHAPES = lerp_table({      # squash channel -> body scale x, y, z
     -1: ("stretch", (0.95, 1.0, 1.06)),
     0:  ("normal",  (1.0, 1.0, 1.0)),
     1:  ("squash",  (1.05, 1.0, 0.93)),
     2:  ("big",     (1.1, 1.0, 0.86)),
-    3:  ("fluff",   (1.12, 1.1, 0.92)),
-}
-LEGS = {            # legs channel -> hip height, leg length scale, feet lift
+}, 0.25)
+SHAPES[3] = ("fluff", (1.12, 1.1, 0.92))
+LEGS = lerp_table({        # legs channel -> hip height, leg length scale, feet lift
     0: ("stand",  (HIP, 1.0, 0.0)),
     1: ("crouch", (0.27, 0.27 / HIP, 0.0)),
     2: ("low",    (0.21, 0.21 / HIP, 0.0)),
-    3: ("tuck",   (HIP, 0.6, 0.12)),
-}
+}, 0.25)
+LEGS[-1] = ("tuck", (HIP, 0.6, 0.12))   # airborne: below stand so crouch -> stand -> tuck rises steadily
+LEGS = dict(sorted(LEGS.items()))
 EYES = {            # eyes channel -> eye scale x, z
     -1: ("wide",   (1.15, 1.5)),
     0:  ("open",   (1.0, 1.0)),
@@ -39,8 +57,8 @@ EYES = {            # eyes channel -> eye scale x, z
     2:  ("closed", (1.0, 0.1)),
 }
 LOOKS = rng(-30, 30, 15)
-LEANS = rng(-24, 24, 6)
-WING_LEANS = [-16, 0, 16]
+LEANS = rng(-24, 24, 3)        # body lean: 3° keeps the neck moving <= ~1 px per step
+WING_LEANS = [-16, -8, 0, 8, 16]
 
 
 def look(l):
@@ -108,7 +126,7 @@ PARTS = [
      "pose": body_pose},
     {"name": "head", "parent": "body", "joints": ["neck", "head", "eyeR", "eyeL"], "pivot": "head",
      "anchors": {"crest": "crest", "jaw": "jaw"},
-     "axes": [axis("pitch", rng(-36, 36, 6), ["lean", "pitch"]), axis("look", LOOKS, ["look"]),
+     "axes": [axis("pitch", rng(-36, 36, 4), ["lean", "pitch"]), axis("look", LOOKS, ["look"]),
               axis("eyes", list(EYES), ["eyes"], [v[0] for v in EYES.values()])],
      "pose": head_pose},
     {"name": "crest", "parent": "head", "joints": ["crest"], "pivot": "crest",

@@ -9,8 +9,9 @@ constexpr int DOLL_MAX_AXES     = 3;
 constexpr int DOLL_MAX_PARTS    = 12;
 constexpr int DOLL_MAX_CHANNELS = 16;
 
-// An image axis: `count` values in axisValues[firstValue..], chosen by the sum
-// of the channels in sourceMask (nearest value; ties pick the lower).
+// An image axis: `count` values in axisValues[firstValue..] (quarter units, so
+// axes can step in fractions), chosen by the sum of the channels in sourceMask
+// (nearest value; ties pick the lower).
 struct DollAxis { uint8_t count; uint16_t firstValue; uint16_t sourceMask; };
 
 // One rendered part image: crop rect on the canvas, its pivot, and the first of

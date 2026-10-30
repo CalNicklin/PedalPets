@@ -16,7 +16,12 @@ import time
 
 import serial
 
-HEADER = "t_ms,pose,eye,mood,energy,reaction,step,frame_us"
+HEADER = "t_ms,pose,eye,mood,energy,reaction,step,frame_us"   # clip packs ("T," lines)
+
+
+def doll_header(n_parts):
+    """Paper-doll packs ("D," lines)."""
+    return "t_ms,mood,energy,reaction,frame_us" + "".join(f",p{i}_img,p{i}_x,p{i}_y" for i in range(n_parts))
 
 
 def main():
@@ -44,10 +49,13 @@ def main():
     while time.time() - t < a.seconds:
         line += s.read(4096)
         *done, line = line.split(b"\n")
-        rows += [d.decode(errors="replace").strip()[2:] for d in done if d.startswith(b"T,")]
+        rows += [d.decode(errors="replace").strip() for d in done if d[:2] in (b"T,", b"D,")]
     s.write(b"t")
+    doll = rows and rows[0].startswith("D,")
+    rows = [r[2:] for r in rows]
+    header = doll_header((rows[0].count(",") - 4) // 3) if doll else HEADER
     with open(a.out, "w") as f:
-        f.write(HEADER + "\n" + "\n".join(rows) + "\n")
+        f.write(header + "\n" + "\n".join(rows) + "\n")
     print(f"wrote {a.out} ({len(rows)} frames)")
 
 

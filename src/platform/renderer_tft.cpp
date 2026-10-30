@@ -1,63 +1,69 @@
 #include "renderer_tft.h"
+
+#if PEDALPETS_DOLL
+#include "gen/doll_meta.h"
+#include "gen/doll_pixels.h"
+namespace art = doll_gen;
+#else
 #include "gen/pose_meta.h"
 #include "gen/pose_pixels.h"
+namespace art = gen;
+#endif
 
 namespace {
 constexpr int16_t  SCREEN_W = 160;
 constexpr int16_t  SCREEN_H = 128;
-constexpr int16_t  CANVAS_X = (SCREEN_W - gen::CANVAS_W) / 2;  // centred, bottom-aligned
-constexpr int16_t  CANVAS_Y = SCREEN_H - gen::CANVAS_H;
+constexpr int16_t  CANVAS_X = (SCREEN_W - art::CANVAS_W) / 2;  // centred, bottom-aligned
+constexpr int16_t  CANVAS_Y = SCREEN_H - art::CANVAS_H;
 constexpr uint16_t EYE = TFT_WHITE;
 constexpr int16_t  SUN_X = SCREEN_W / 2, SUN_Y = 46, SUN_R = 36;
+#if PEDALPETS_DOLL
+constexpr bool HAS_SUN = true;
+#define PEDALPETS_PAL4 1
+#else
+constexpr bool HAS_SUN = gen::HAS_SUN;
+#define PEDALPETS_PAL4 PEDALPETS_PALETTED
+#endif
 }  // namespace
 
 void RendererTft::begin() {
   tft_.init();
   tft_.setRotation(1);
-  tft_.fillScreen(gen::BG_COLOR);
+  tft_.fillScreen(art::BG_COLOR);
   canvas_.setColorDepth(16);
   canvas_.createSprite(SCREEN_W, SCREEN_H);
   canvas_.setSwapBytes(true);
-#if PEDALPETS_PALETTED
-  for (int i = 0; i < 16; i++) palette_[i] = (gen::PALETTE[i] >> 8) | (gen::PALETTE[i] << 8);
+#if PEDALPETS_PAL4
+  for (int i = 0; i < 16; i++) palette_[i] = (art::PALETTE[i] >> 8) | (art::PALETTE[i] << 8);
 #endif
 }
 
-#if PEDALPETS_PALETTED
+void RendererTft::background() {
+  canvas_.fillSprite(art::BG_COLOR);
+  if (HAS_SUN) canvas_.fillCircle(SUN_X, SUN_Y, SUN_R, art::SUN_COLOR);
+}
+
 // 4-bit palette pixels straight into the sprite buffer; index 0 is transparent.
-void RendererTft::blitPose(uint16_t pose, int16_t x0, int16_t y0) {
-  const PoseMeta& m = gen::POSES[pose];
-  const uint8_t* src = gen::POSE_PIXELS[pose];
+void RendererTft::blitPal4(const uint8_t* src, int w, int h, int x0, int y0) {
   uint16_t* buf = (uint16_t*)canvas_.getPointer();
-  int stride = (m.w + 1) / 2;
-  for (int r = 0; r < m.h; r++) {
+  int stride = (w + 1) / 2;
+  for (int r = 0; r < h; r++) {
     int sy = y0 + r;
     if (sy < 0 || sy >= SCREEN_H) continue;
     const uint8_t* row = src + r * stride;
     uint16_t* dst = buf + sy * SCREEN_W;
-    for (int c = 0; c < m.w; c++) {
+    for (int c = 0; c < w; c++) {
       uint8_t idx = (c & 1) ? (row[c >> 1] & 0x0F) : (row[c >> 1] >> 4);
       int sx = x0 + c;
       if (idx && sx >= 0 && sx < SCREEN_W) dst[sx] = palette_[idx];
     }
   }
 }
-#else
-void RendererTft::blitPose(uint16_t pose, int16_t x0, int16_t y0) {
-  const PoseMeta& m = gen::POSES[pose];
-  canvas_.pushImage(x0, y0, m.w, m.h, (uint16_t*)gen::POSE_PIXELS[pose]);
-}
-#endif
 
-void RendererTft::draw(uint16_t pose, Eye eye, const HudInfo* hud) {
-  canvas_.fillSprite(gen::BG_COLOR);
-  if (gen::HAS_SUN) canvas_.fillCircle(SUN_X, SUN_Y, SUN_R, gen::SUN_COLOR);
-  const PoseMeta& m = gen::POSES[pose];
-  blitPose(pose, CANVAS_X + m.x, CANVAS_Y + m.y);
-  if (m.eyeX != EYES_BAKED) drawEyes(CANVAS_X + m.eyeX, CANVAS_Y + m.eyeY, eye);
+void RendererTft::finish(const HudInfo* hud) {
   if (hud) {
     canvas_.setTextFont(1);
-    canvas_.setTextColor(TFT_WHITE, gen::BG_COLOR);
+    canvas_.setTextColor(TFT_BLACK, art::BG_COLOR);
     canvas_.setCursor(2, 2);
     canvas_.printf("%s %.2f", hud->mood, hud->energy);
     if (hud->reaction) {
@@ -67,6 +73,30 @@ void RendererTft::draw(uint16_t pose, Eye eye, const HudInfo* hud) {
   }
   canvas_.pushSprite(0, 0);
 }
+
+#if PEDALPETS_DOLL
+void RendererTft::drawDoll(const DollPlacement* parts, const HudInfo* hud) {
+  background();
+  for (int i = 0; i < art::DOLL.partCount; i++) {
+    const DollPlacement& p = parts[art::DOLL.drawOrder[i]];
+    const DollImage& im = art::IMAGES[p.image];
+    blitPal4(art::PIXELS[p.image], im.w, im.h, CANVAS_X + p.x, CANVAS_Y + p.y);
+  }
+  finish(hud);
+}
+#else
+void RendererTft::draw(uint16_t pose, Eye eye, const HudInfo* hud) {
+  background();
+  const PoseMeta& m = gen::POSES[pose];
+#if PEDALPETS_PALETTED
+  blitPal4(gen::POSE_PIXELS[pose], m.w, m.h, CANVAS_X + m.x, CANVAS_Y + m.y);
+#else
+  canvas_.pushImage(CANVAS_X + m.x, CANVAS_Y + m.y, m.w, m.h, (uint16_t*)gen::POSE_PIXELS[pose]);
+#endif
+  if (m.eyeX != EYES_BAKED) drawEyes(CANVAS_X + m.eyeX, CANVAS_Y + m.eyeY, eye);
+  finish(hud);
+}
+#endif
 
 // Placeholder primitives: two dots 8 px apart. Real eye sprites arrive in sub-project 2.
 void RendererTft::drawEyes(int cx, int cy, Eye eye) {

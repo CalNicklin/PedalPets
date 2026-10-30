@@ -47,7 +47,7 @@ def test_tables(tmp_path):
     assert base["parent"] == -1 and arm["parent"] == 0 and arm["slot"] == 0
     assert base["axes"] == [(2, 0, 0b010)]
     assert arm["axes"] == [(2, 2, 0b110)]
-    assert t["axis_values"] == [0, 1, -10, 10]
+    assert t["axis_values"] == [0, 4, -40, 40]          # quarter units
     assert t["draw_order"] == [1, 0]
     assert t["hop"] == 0
     # crop + quarter-pixel pivot/anchors

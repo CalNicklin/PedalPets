@@ -4,17 +4,32 @@
 #include "core/eyes.h"
 #include "core/performer.h"
 #include "core/timing.h"
-#include "gen/pose_meta.h"
+#include "gen/pack.h"
 #include "platform/mock_input.h"
 #include "platform/renderer_tft.h"
+#if PEDALPETS_DOLL
+#include "core/choreo.h"
+#include "core/doll.h"
+#include "core/mood.h"
+#include "gen/doll_meta.h"
+#include "gen/doll_moves.h"
+#else
+#include "gen/pose_meta.h"
+#endif
 
 namespace {
 const char* const MOOD_NAMES[] = {"Asleep", "Curious", "IntoIt", "Hyped"};
 
 Rng           rng(1);
+#if PEDALPETS_DOLL
+MoodModel     moodModel;
+Choreographer choreo(doll_gen::CHOREO, rng);
+DollPlacement placements[doll_gen::PART_COUNT];
+#else
 Performer     performer(gen::ART, rng);
 Brain         brain(gen::ART, rng, performer);
 EyeController eyes(rng);
+#endif
 MockInput     mock;
 RendererTft   renderer;
 bool          hud = false;
@@ -24,9 +39,45 @@ uint32_t      tickCount = 0;
 
 void resetAll(uint32_t now) {
   mock.reset();
+#if PEDALPETS_DOLL
+  moodModel.reset(now);
+  choreo.reset(moodModel.mood(), now);
+#else
   brain.reset(now);
   eyes.reset(now);
+#endif
 }
+
+#if PEDALPETS_DOLL
+// Logic tick for the paper doll: mood from the music, moves from the mood.
+void dollTick(uint32_t t) {
+  MusicEvent e;
+  while (mock.pop(t, e)) {
+    MoodChange c = moodModel.onEvent(e, t);
+    if (c == MoodChange::Woke) choreo.onMoodChange(c, moodModel.mood(), t);  // waking eats the event
+    else choreo.onEvent(e, moodModel.mood(), t);
+  }
+  MoodChange c = moodModel.tick(mock.features(t), t);
+  if (c != MoodChange::None) choreo.onMoodChange(c, moodModel.mood(), t);
+}
+
+void dollFrame(uint32_t t, uint32_t now) {
+  choreo.tick(moodModel.mood(), moodModel.energy(), t);
+  composeDoll(doll_gen::DOLL, choreo.pose(), placements);
+  int rx = choreo.reaction();
+  HudInfo info = {MOOD_NAMES[(int)moodModel.mood()], moodModel.energy(),
+                  rx >= 0 ? doll_gen::MOVE_NAMES[rx] : nullptr, 0};
+  uint32_t start = micros();
+  renderer.drawDoll(placements, hud ? &info : nullptr);
+  if (telemetry) {
+    Serial.printf("D,%u,%d,%.3f,%s,%u", now, (int)moodModel.mood(), moodModel.energy(),
+                  info.reaction ? info.reaction : "-", micros() - start);
+    for (int i = 0; i < doll_gen::PART_COUNT; i++)
+      Serial.printf(",%u,%d,%d", placements[i].image, placements[i].x, placements[i].y);
+    Serial.print('\n');
+  }
+}
+#endif
 }  // namespace
 
 void setup() {
@@ -51,6 +102,10 @@ void loop() {
   nextTick += TICK_MS;
 
   mock.tick(t);
+#if PEDALPETS_DOLL
+  dollTick(t);
+  if (++tickCount % TICKS_PER_FRAME == 0) dollFrame(t, now);
+#else
   MusicEvent e;
   while (mock.pop(t, e)) brain.onEvent(e, t);
   brain.tick(mock.features(t), t);
@@ -71,4 +126,5 @@ void loop() {
                     performer.step(), micros() - start);
     }
   }
+#endif
 }

@@ -62,7 +62,7 @@ def build(doll_dir):
                     fail(f"part {p['name']} axis {ax['name']}: unknown channel {src!r}")
                 mask |= 1 << channels.index(src)
             axes.append((len(ax["values"]), len(axis_values), mask))
-            axis_values += [int(round(v)) for v in ax["values"]]
+            axis_values += [q4(v) for v in ax["values"]]   # quarter units
         kids = children[p["name"]]
         first_image = len(images)
         for img in p["images"]:

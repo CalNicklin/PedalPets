@@ -1,6 +1,8 @@
 #pragma once
 #include <TFT_eSPI.h>
 #include "core/art_tables.h"
+#include "core/doll.h"
+#include "gen/pack.h"
 
 struct HudInfo {
   const char* mood;
@@ -12,11 +14,19 @@ struct HudInfo {
 class RendererTft {
  public:
   void begin();
+#if PEDALPETS_DOLL
+  // Paper doll: every part at its placement, back to front.
+  void drawDoll(const DollPlacement* parts, const HudInfo* hud);
+#else
+  // Whole-frame clip art.
   void draw(uint16_t pose, Eye eye, const HudInfo* hud);  // hud == nullptr hides it
+#endif
 
  private:
+  void background();
+  void finish(const HudInfo* hud);
+  void blitPal4(const uint8_t* src, int w, int h, int x0, int y0);
   void drawEyes(int cx, int cy, Eye eye);
-  void blitPose(uint16_t pose, int16_t x, int16_t y);
 
   TFT_eSPI    tft_;
   TFT_eSprite canvas_{&tft_};
