@@ -102,7 +102,8 @@ def process_pose(name, p):
     x0, y0, x1, y1 = box
     rgb = flat.crop(box).tobytes()
     pixels = [to_rgb565(rgb[i], rgb[i + 1], rgb[i + 2]) for i in range(0, len(rgb), 3)]
-    return {"x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0, "ex": ex, "ey": ey, "pixels": pixels}
+    return {"x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0, "ex": ex, "ey": ey, "pixels": pixels,
+            "image": flat.crop(box)}
 
 
 def parse_hold(h, where):

@@ -20,6 +20,7 @@ EyeController eyes(rng);
 MockInput     mock;
 RendererTft   renderer;
 bool          hud = false;
+bool          telemetry = false;  // one CSV line per frame, for tools/render_timeline.py
 uint32_t      lastTick = 0, lastFrame = 0;
 
 void resetAll(uint32_t now) {
@@ -30,11 +31,12 @@ void resetAll(uint32_t now) {
 }  // namespace
 
 void setup() {
+  Serial.setTxBufferSize(1024);  // telemetry lines must not block the loop
   Serial.begin(115200);
   rng = Rng(esp_random());
   renderer.begin();
   resetAll(millis());
-  Serial.println("PedalPets ready. Keys: p P h f s S w W c + - 0 | 1-3 scripts | d HUD | r reset");
+  Serial.println("PedalPets ready. Keys: p P h f s S w W c + - 0 | 1-3 scripts | d HUD | t telemetry | r reset");
 }
 
 void loop() {
@@ -42,6 +44,7 @@ void loop() {
   while (Serial.available()) mock.key((char)Serial.read(), now);
   if (mock.takeReset()) resetAll(now);
   if (mock.takeHudToggle()) hud = !hud;
+  if (mock.takeTelemetryToggle()) telemetry = !telemetry;
 
   if (now - lastTick >= TICK_MS) {
     lastTick = now;
@@ -60,6 +63,12 @@ void loop() {
       performer.playing() ? gen::REACTION_IDS[performer.reaction()] : nullptr,
       performer.step(),
     };
+    uint32_t start = micros();
     renderer.draw(performer.pose(), eyes.eye(), hud ? &info : nullptr);
+    if (telemetry) {
+      Serial.printf("T,%u,%u,%d,%d,%.3f,%s,%d,%u\n", now, performer.pose(), (int)eyes.eye(),
+                    (int)brain.mood(), brain.energy(), info.reaction ? info.reaction : "-",
+                    performer.step(), micros() - start);
+    }
   }
 }
