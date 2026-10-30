@@ -1,0 +1,114 @@
+#pragma once
+#include <stdint.h>
+#include "art_tables.h"
+#include "doll.h"
+#include "mood.h"
+#include "music_event.h"
+#include "rng.h"
+
+// Choreographer: drives a paper doll by layering authored moves over a mood
+// stance. Moves fade in and out and overlap, so the pet never cuts between
+// clips: moods glide, beats crossfade, reactions duck everything else.
+
+// A move channel track: samples[first + frame], in quarter units.
+struct MoveTrack { uint8_t channel; uint16_t first; };
+
+struct Move {
+  uint8_t   frames;
+  uint8_t   trackCount;
+  uint16_t  firstTrack;
+  uint8_t   loopFrom, loopLen;   // loop section; loopLen 0 = none
+  EventType loopUntil;           // repeat while waiting for it (None = only when extended)
+  uint16_t  loopMaxMs;           // from move start
+  uint16_t  freezeMs;            // hold the current pose this long first (Cut)
+};
+
+enum class MoveKind : uint8_t { Idle, Beat };
+struct VocabEntry { uint8_t move; uint8_t weight; MoveKind kind; };
+
+struct MoodStyle {
+  int16_t  stance[DOLL_MAX_CHANNELS];   // quarter units
+  uint16_t firstVocab;
+  uint8_t  vocabCount;
+  uint16_t idleGapMin, idleGapMax;      // ms between idle moves
+  uint16_t beatMs;                      // beat-move tempo with no picks (0 = none)
+};
+
+struct ReactionMoves { Trigger trigger; uint8_t first; uint8_t count; };  // into reactionMoveIds
+
+struct Choreography {
+  const Move*          moves;
+  uint8_t              moveCount;
+  const MoveTrack*     tracks;
+  const int16_t*       samples;
+  MoodStyle            moods[MOOD_COUNT];
+  const VocabEntry*    vocab;
+  const ReactionMoves* reactions;
+  uint8_t              reactionCount;
+  const uint8_t*       reactionMoveIds;
+  uint8_t              channelCount;
+};
+
+struct ChoreoConfig {
+  float    stanceEase       = 0.15f;   // per frame, toward the mood stance
+  float    fadeStep         = 0.25f;   // weight change per frame
+  float    duck             = 0.2f;    // other moves' weight during a reaction
+  float    reactionStart    = 0.4f;    // reactions start at this weight (instant but not a cut)
+  uint32_t interruptGuardMs = 120;
+  uint32_t cooldownMs       = 1500;
+  float    beatRetrigger    = 0.6f;    // a new beat move waits until the last is this far through
+  uint32_t pickTimeoutMs    = 1500;    // no picks for this long -> mood tempo drives beats
+  float    beatAmpBase      = 0.7f;    // beat moves scale with energy: base + energy * gain
+  float    beatAmpGain      = 0.5f;
+};
+
+constexpr int CHOREO_MAX_ACTIVE = 8;
+
+class Choreographer {
+ public:
+  Choreographer(const Choreography& c, Rng& rng, const ChoreoConfig& cfg = ChoreoConfig());
+
+  void reset(Mood mood, uint32_t now);
+  void onEvent(const MusicEvent& e, Mood mood, uint32_t now);
+  void onMoodChange(MoodChange change, Mood mood, uint32_t now);
+  void tick(Mood mood, float energy, uint32_t now);   // once per display frame
+
+  const DollPose& pose() const { return pose_; }
+  int  reaction() const;                     // move id of the active reaction, or -1
+  int  activeCount() const;
+  float weightOf(int move) const;            // summed weight of a move's active slots
+
+ private:
+  struct Slot {
+    int8_t   move = -1;
+    uint8_t  frame = 0;
+    float    weight = 0, target = 0;
+    bool     reaction = false, beat = false, extend = false, ducked = false;
+    uint32_t start = 0;
+  };
+
+  void fire(Trigger t, Mood mood, uint32_t now);
+  void startIdle(Mood mood, uint32_t now);
+  void startBeat(Mood mood, uint32_t now);
+  int  pickVocab(Mood mood, MoveKind kind);
+  Slot* add(int move, uint32_t now, float weight, float target);
+  Slot* reactionSlot();
+  void advance(Slot& s, uint32_t now);
+  float sample(const Slot& s, int channel) const;
+
+  const Choreography& c_;
+  Rng&                rng_;
+  ChoreoConfig        cfg_;
+  Slot                slots_[CHOREO_MAX_ACTIVE];
+  float               stance_[DOLL_MAX_CHANNELS] = {};
+  DollPose            pose_ = {};
+  Trigger             reactionTrigger_ = Trigger::None;
+  uint16_t            seen_ = 0;
+  uint32_t            frozenUntil_ = 0;
+  uint32_t            nextIdle_ = 0, lastPick_ = 0, lastBeat_ = 0;
+  int                 lastIdle_ = -1, lastBeatMove_ = -1;
+  int                 lastVariant_[TRIGGER_COUNT];
+  bool                started_[TRIGGER_COUNT] = {};
+  uint32_t            lastStart_[TRIGGER_COUNT] = {};
+  float               energy_ = 0;
+};

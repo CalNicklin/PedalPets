@@ -363,6 +363,7 @@ def main():
     (OUT / "pose_meta.h").write_text(emit_meta(lay, poses, steps, reactions, idle_flat, idle_loops,
                                                entry_tables))
     (OUT / "pose_pixels.h").write_text(emit_pixels(poses, pal, bg))
+    (OUT / "pack.h").write_text(f"{HEADER}\n#pragma once\n#define PEDALPETS_DOLL 0\n")
     total = sum(len(p["pal4"]) if pal else len(p["pixels"]) * 2 for _, p in poses)
     print(f"build_art: {len(poses)} poses ({total / 1024:.0f} KB pixels), "
           f"{len(reactions)} reactions, {len(steps)} steps")

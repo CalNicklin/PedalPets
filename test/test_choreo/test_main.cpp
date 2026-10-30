@@ -1,0 +1,180 @@
+#include <unity.h>
+#include "core/choreo.h"
+
+void setUp() {}
+void tearDown() {}
+
+// Channels: 0 hop, 1 a, 2 b. Samples in quarter units.
+static const int16_t SAMPLES[] = {
+  0, 4, 8, 0,              // 0 idle_a  (ch1)
+  0, 8, 16, 8, 0, 0,       // 1 beat_b  (ch2)
+  0, 40, 40, 40, 0,        // 2 react   (ch1)
+  0, 20, 20, 20, 20, 0,    // 3 react_loop (ch1), loop frames 1..3
+  0, 12, 0,                // 4 wake (ch1)
+  0, 40, 0,                // 5 point (ch2), after a freeze
+};
+static const MoveTrack TRACKS[] = {{1, 0}, {2, 4}, {1, 10}, {1, 15}, {1, 21}, {2, 24}};
+static const Move MOVES[] = {
+  // frames, tracks, firstTrack, loopFrom, loopLen, loopUntil, loopMaxMs, freezeMs
+  {4, 1, 0, 0, 0, EventType::None, 0, 0},
+  {6, 1, 1, 0, 0, EventType::None, 0, 0},
+  {5, 1, 2, 0, 0, EventType::None, 0, 0},
+  {6, 1, 3, 1, 3, EventType::SustainEnd, 1000, 0},
+  {3, 1, 4, 0, 0, EventType::None, 0, 0},
+  {3, 1, 5, 0, 0, EventType::None, 0, 300},
+};
+enum { IDLE_A, BEAT_B, REACT, REACT_LOOP, WAKE, POINT };
+static const VocabEntry VOCAB[] = {{IDLE_A, 1, MoveKind::Idle}, {BEAT_B, 1, MoveKind::Beat}};
+static const uint8_t REACTION_IDS[] = {REACT, REACT_LOOP, WAKE, POINT, REACT_LOOP};
+static const ReactionMoves REACTIONS[] = {
+  {Trigger::BigHit, 0, 1}, {Trigger::Sustain, 1, 1}, {Trigger::Wake, 2, 1}, {Trigger::Cut, 3, 1},
+  {Trigger::Flurry, 4, 1},
+};
+static Choreography make() {
+  Choreography c = {};
+  c.moves = MOVES; c.moveCount = 6; c.tracks = TRACKS; c.samples = SAMPLES;
+  c.vocab = VOCAB; c.reactions = REACTIONS; c.reactionCount = 5; c.reactionMoveIds = REACTION_IDS;
+  c.channelCount = 3;
+  c.moods[(int)Mood::Asleep].stance[1] = 40;           // a = 10 while asleep
+  c.moods[(int)Mood::Curious].firstVocab = 0;           // idle_a every 300 ms
+  c.moods[(int)Mood::Curious].vocabCount = 1;
+  c.moods[(int)Mood::Curious].idleGapMin = 300;
+  c.moods[(int)Mood::Curious].idleGapMax = 300;
+  c.moods[(int)Mood::IntoIt].firstVocab = 1;            // beat_b on picks
+  c.moods[(int)Mood::IntoIt].vocabCount = 1;
+  c.moods[(int)Mood::IntoIt].idleGapMin = 60000;
+  c.moods[(int)Mood::IntoIt].idleGapMax = 60000;
+  return c;
+}
+static Choreography CH = make();
+static Rng rng(1);
+static Choreographer* ch = nullptr;
+static uint32_t t;
+
+static void frames(Mood m, int n, float energy = 0) {
+  for (int i = 0; i < n; i++) { t += 30; ch->tick(m, energy, t); }
+}
+static void send(EventType e, Mood m) { ch->onEvent({e, t, 1.0f}, m, t); }
+
+static void fresh(Mood m) {
+  delete ch;
+  rng = Rng(1);
+  ch = new Choreographer(CH, rng);
+  t = 0;
+  ch->reset(m, t);
+}
+
+void test_stance_eases_toward_mood() {
+  fresh(Mood::Curious);
+  TEST_ASSERT_EQUAL_FLOAT(0, ch->pose().ch[1]);
+  frames(Mood::Asleep, 1);
+  float first = ch->pose().ch[1];
+  TEST_ASSERT_TRUE(first > 0 && first < 3);               // glides, no jump
+  frames(Mood::Asleep, 60);
+  TEST_ASSERT_FLOAT_WITHIN(0.1f, 10.0f, ch->pose().ch[1]);
+}
+
+void test_idle_moves_play_on_their_gap() {
+  fresh(Mood::Curious);
+  frames(Mood::Curious, 10);                              // 300 ms -> idle_a starts
+  TEST_ASSERT_TRUE(ch->weightOf(IDLE_A) > 0);
+  float peak = 0;
+  for (int i = 0; i < 5; i++) { frames(Mood::Curious, 1); if (ch->pose().ch[1] > peak) peak = ch->pose().ch[1]; }
+  TEST_ASSERT_TRUE(peak > 0.5f);
+}
+
+void test_picks_start_beat_moves_only_when_grooving() {
+  fresh(Mood::Curious);
+  send(EventType::Pick, Mood::Curious);
+  TEST_ASSERT_EQUAL_FLOAT(0, ch->weightOf(BEAT_B));
+  fresh(Mood::IntoIt);
+  send(EventType::Pick, Mood::IntoIt);
+  TEST_ASSERT_TRUE(ch->weightOf(BEAT_B) > 0);
+}
+
+void test_rapid_picks_wait_for_beat_move_to_progress() {
+  fresh(Mood::IntoIt);
+  send(EventType::Pick, Mood::IntoIt);
+  frames(Mood::IntoIt, 1);
+  send(EventType::Pick, Mood::IntoIt);                    // too soon: same move carries on
+  TEST_ASSERT_EQUAL_INT(1, ch->activeCount());
+  frames(Mood::IntoIt, 3);
+  send(EventType::Pick, Mood::IntoIt);                    // 4/6 through: crossfade to a new one
+  TEST_ASSERT_EQUAL_INT(2, ch->activeCount());
+}
+
+void test_reaction_ducks_other_moves() {
+  fresh(Mood::Curious);
+  frames(Mood::Curious, 10);
+  TEST_ASSERT_TRUE(ch->weightOf(IDLE_A) > 0.2f);
+  send(EventType::BigHit, Mood::Curious);
+  TEST_ASSERT_EQUAL_INT(REACT, ch->reaction());
+  frames(Mood::Curious, 3);
+  TEST_ASSERT_TRUE(ch->weightOf(IDLE_A) <= 0.21f);
+}
+
+void test_reaction_fades_in_not_cut() {
+  fresh(Mood::Curious);
+  send(EventType::BigHit, Mood::Curious);
+  frames(Mood::Curious, 1);
+  float w = ch->weightOf(REACT);
+  TEST_ASSERT_TRUE(w > 0.3f && w < 1.0f);
+}
+
+void test_lower_priority_ignored_during_reaction() {
+  fresh(Mood::Curious);
+  send(EventType::BigHit, Mood::Curious);
+  frames(Mood::Curious, 2);
+  send(EventType::SustainStart, Mood::Curious);
+  TEST_ASSERT_EQUAL_INT(REACT, ch->reaction());
+}
+
+void test_loop_section_holds_until_event() {
+  fresh(Mood::Curious);
+  send(EventType::SustainStart, Mood::Curious);
+  frames(Mood::Curious, 20);
+  TEST_ASSERT_EQUAL_INT(REACT_LOOP, ch->reaction());      // still looping
+  send(EventType::SustainEnd, Mood::Curious);
+  frames(Mood::Curious, 6);
+  TEST_ASSERT_EQUAL_INT(-1, ch->reaction());
+}
+
+void test_loop_section_caps_at_max() {
+  fresh(Mood::Curious);
+  send(EventType::SustainStart, Mood::Curious);
+  frames(Mood::Curious, 45);                              // 1350 ms > 1000 ms cap
+  TEST_ASSERT_EQUAL_INT(-1, ch->reaction());
+}
+
+void test_freeze_holds_pose_then_plays() {
+  fresh(Mood::Curious);
+  frames(Mood::Asleep, 5);                                // pose moving toward asleep stance
+  float held = ch->pose().ch[1];
+  send(EventType::Cut, Mood::Asleep);
+  frames(Mood::Asleep, 9);                                // 270 ms < 300 ms freeze
+  TEST_ASSERT_EQUAL_FLOAT(held, ch->pose().ch[1]);
+  frames(Mood::Asleep, 3);
+  TEST_ASSERT_TRUE(ch->pose().ch[1] > held);              // moving again
+}
+
+void test_wake_on_mood_change() {
+  fresh(Mood::Asleep);
+  ch->onMoodChange(MoodChange::Woke, Mood::Curious, t);
+  TEST_ASSERT_EQUAL_INT(WAKE, ch->reaction());
+}
+
+int main(int, char**) {
+  UNITY_BEGIN();
+  RUN_TEST(test_stance_eases_toward_mood);
+  RUN_TEST(test_idle_moves_play_on_their_gap);
+  RUN_TEST(test_picks_start_beat_moves_only_when_grooving);
+  RUN_TEST(test_rapid_picks_wait_for_beat_move_to_progress);
+  RUN_TEST(test_reaction_ducks_other_moves);
+  RUN_TEST(test_reaction_fades_in_not_cut);
+  RUN_TEST(test_lower_priority_ignored_during_reaction);
+  RUN_TEST(test_loop_section_holds_until_event);
+  RUN_TEST(test_loop_section_caps_at_max);
+  RUN_TEST(test_freeze_holds_pose_then_plays);
+  RUN_TEST(test_wake_on_mood_change);
+  return UNITY_END();
+}
