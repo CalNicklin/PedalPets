@@ -11,11 +11,9 @@ struct HudInfo {
   const char* thought;
 };
 
-// What the pet thinks aloud: a comic thought cloud in the top-left corner,
-// with a trail of little circles towards its head.
+// What the pet says: shown as a comic caption in the top-left corner.
 struct Bubble {
   const char* text;      // nullptr: nothing to say
-  int         headX, headY;   // where the trail points (screen)
 };
 
 class RendererTft {

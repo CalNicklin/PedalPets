@@ -92,8 +92,7 @@ class Art:
         return img
 
     def draw_bubble(self, img, row):
-        """As the board draws it (renderer_tft.cpp drawCaption): a scalloped white thought cloud,
-        top left, slanted capitals, a trail of circles towards the head."""
+        """As the board draws it (renderer_tft.cpp drawCaption): a white comic caption, top left, slanted."""
         from PIL import ImageFont
         words, lines = row["say"].replace(";", ",").split(), [""]
         for w in words:
@@ -102,35 +101,19 @@ class Art:
             elif len(lines) < 2:
                 lines.append(w)
         lines = [l.upper() for l in lines]
-        w, h = max(len(l) for l in lines) * 6 + 10, len(lines) * 9 + 6
-        x, y = 4, 4
+        w, h = max(len(l) for l in lines) * 6 + 9, len(lines) * 9 + 5
+        x, y = 2, 2
         d = ImageDraw.Draw(img)
-        ink, white = (32, 24, 32), (255, 255, 255)
-        def edge(col, r):
-            pts = [(px, y) for px in range(x + 3, x + w - 2, 6)] + [(px, y + h - 1) for px in range(x + 3, x + w - 2, 6)]
-            pts += [(x, py) for py in range(y + 3, y + h - 3, 5)] + [(x + w - 1, py) for py in range(y + 3, y + h - 3, 5)]
-            for px, py in pts:
-                d.ellipse([px - r, py - r, px + r, py + r], fill=col)
-        edge(ink, 3); edge(white, 2)
-        d.rectangle([x, y, x + w - 1, y + h - 1], fill=white)
+        ink = (28, 24, 32)
+        d.rectangle([x + 1, y + 1, x + w, y + h], fill=ink)
+        d.rectangle([x - 1, y - 1, x + w - 2, y + h - 2], fill=ink)
+        d.rectangle([x, y, x + w - 3, y + h - 3], fill=(255, 255, 255))
         font = ImageFont.load_default(size=8)
-        for i, l in enumerate(lines):
+        for i, l in enumerate(lines):               # the text, then slanted like the board's
             layer = Image.new("L", (len(l) * 6 + 4, 9), 0)
             ImageDraw.Draw(layer).text((0, -1), l, fill=255, font=font)
             layer = layer.transform(layer.size, Image.AFFINE, (1, 0.3, -2.4, 0, 1, 0), resample=Image.NEAREST)
-            img.paste(ink, (x + 4, y + 3 + i * 9), layer)
-        k = self.part_names.index("skull") if "skull" in self.part_names else self.part_names.index("head")
-        n, px, py = row["parts"][k]
-        hx, hy = self.ox + px + self.crops[n].width // 2, self.oy + py
-        sx, sy = x + w - 6, y + h + 4
-        dx, dy = hx - sx, hy - sy
-        dist = (dx * dx + dy * dy) ** 0.5
-        if dist >= 12:
-            dx, dy, along = dx / dist, dy / dist, 0
-            for r in (3, 2, 1):
-                cx, cy = sx + int(dx * along), sy + int(dy * along)
-                d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=white, outline=ink)
-                along += 2 * r + 4
+            img.paste(ink, (x + 3, y + 2 + i * 9), layer)
 
     def mask(self, row):
         m = Image.new("L", (SCREEN_W, SCREEN_H), 0)

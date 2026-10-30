@@ -124,17 +124,6 @@ class DollPet {
 
   const Hand* hands(int* count) const { *count = handCount_; return hands_; }   // this frame's hands
 
-  // The top of the head on screen (for a thought's trail to point at).
-  void headTop(int* x, int* y) const {
-    *x = SCREEN_W / 2;
-    *y = SCREEN_H / 2;
-    if (char_->headPart < 0) return;
-    const DollPlacement& p = parts[char_->headPart];
-    const DollImage& im = char_->doll.images[p.image];
-    *x = canvasX() + p.x + im.w / 2;
-    *y = canvasY() + p.y;
-  }
-
   int canvasX() const { return (SCREEN_W - char_->canvasW) / 2; }   // the doll canvas, bottom-centred
   int canvasY() const { return SCREEN_H - char_->canvasH; }
 

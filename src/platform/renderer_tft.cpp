@@ -77,49 +77,22 @@ void RendererTft::drawItalic(const char* text, int x, int y, uint16_t ink) {
   }
 }
 
-// A thought cloud, Silver Age style: white with a scalloped edge in a thin ink
-// line, the words in slanted capitals (one line when they fit), and a trail of
-// shrinking circles towards the head.
+// A comic caption: a white box with a hard black shadow in the top-left corner,
+// the line in slanted capitals; one line when it fits.
 void RendererTft::drawCaption(const Bubble& b) {
   char lines[2][SPEECH_LINE + 1];
   int n = wrapSpeech(b.text, lines);
   if (!n) return;
   int len = (int)strlen(lines[0]);
   if (n > 1 && (int)strlen(lines[1]) > len) len = (int)strlen(lines[1]);
-  int w = len * CHAR_W + 10, h = n * LINE_H + 6;
-  int x = 4, y = 4;
-  // The scallops: ink bumps round the edge, white bumps inside them, then the body.
-  auto edge = [&](uint16_t col, int r) {
-    for (int px = x + 3; px <= x + w - 3; px += 6) {
-      canvas_.fillCircle(px, y, r, col);
-      canvas_.fillCircle(px, y + h - 1, r, col);
-    }
-    for (int py = y + 3; py <= y + h - 4; py += 5) {
-      canvas_.fillCircle(x, py, r, col);
-      canvas_.fillCircle(x + w - 1, py, r, col);
-    }
-  };
-  edge(CAPTION_INK, 3);
-  edge(CAPTION_FILL, 2);
-  canvas_.fillRect(x, y, w, h, CAPTION_FILL);
+  int w = len * CHAR_W + 9, h = n * LINE_H + 5;
+  int x = 2, y = 2;
+  canvas_.fillRect(x + 1, y + 1, w, h, CAPTION_INK);         // a hard drop shadow
+  canvas_.fillRect(x - 1, y - 1, w, h, CAPTION_INK);
+  canvas_.fillRect(x, y, w - 2, h - 2, CAPTION_FILL);
   for (int i = 0; i < n; i++) {
     for (char* c = lines[i]; *c; c++) *c = (char)toupper((unsigned char)*c);
-    drawItalic(lines[i], x + 4, y + 3 + i * LINE_H, CAPTION_INK);
-  }
-  // The trail: three circles, big to small, a third of the way to the head.
-  int sx = x + w - 6, sy = y + h + 4;
-  float dx = (float)(b.headX - sx), dy = (float)(b.headY - sy);
-  float d = sqrtf(dx * dx + dy * dy);
-  if (d < 12) return;
-  dx /= d;
-  dy /= d;
-  static const int R[] = {3, 2, 1};
-  float along = 0;
-  for (int i = 0; i < 3; i++) {
-    int cx = sx + (int)(dx * along), cy = sy + (int)(dy * along);
-    canvas_.fillCircle(cx, cy, R[i], CAPTION_FILL);
-    canvas_.drawCircle(cx, cy, R[i], CAPTION_INK);
-    along += 2.0f * R[i] + 4;
+    drawItalic(lines[i], x + 3, y + 2 + i * LINE_H, CAPTION_INK);
   }
 }
 
