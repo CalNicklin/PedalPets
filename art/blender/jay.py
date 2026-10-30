@@ -20,9 +20,13 @@ lib.KEYED = ("root", "hips", "tail", "shoulderR", "shoulderL", "neck", "head", "
 
 def build_character():
     root = J["root"] = joint("root", J["turn"])
+    # Legs hang from the hip: scaling `legs` in z shortens them (crouch/tuck).
+    legs = J["legs"] = joint("legs", root, (0, 0, 0.34))
     for side in (-1, 1):
-        cone(f"leg{side}", "grey", root, (0.11 * side, 0.02, 0.18), 0.035, 0.03, 0.36)
-        blob(f"foot{side}", "grey", root, (0.11 * side, -0.06, 0.02), (0.07, 0.13, 0.03))
+        cone(f"leg{side}", "grey", legs, (0.11 * side, 0.02, -0.17), 0.035, 0.03, 0.34)
+    feet = J["feet"] = joint("feet", root, (0, 0, 0))
+    for side in (-1, 1):
+        blob(f"foot{side}", "grey", feet, (0.11 * side, -0.06, 0.02), (0.07, 0.13, 0.03))
 
     hips = J["hips"] = joint("hips", root, (0, 0, 0.34))
     blob("body", "blue", hips, (0, 0.05, 0.42), (0.4, 0.46, 0.48), rot=(-12, 0, 0))
@@ -246,6 +250,9 @@ def secondary(act, f):
             "crest": {"r": (c[0] + crest_lag, c[1], c[2])}}
 
 
-if os.environ.get("PET_HUB_ONLY"):
-    show()
-lib.run(build_character, secondary, turn_deg=-48)
+TURN_DEG = -48
+
+if __name__ == "__main__":
+    if os.environ.get("PET_HUB_ONLY"):
+        show()
+    lib.run(build_character, secondary, turn_deg=TURN_DEG)

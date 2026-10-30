@@ -225,10 +225,8 @@ def srgb(c):
     return round(255 * max(0.0, min(1.0, v)))
 
 
-def run(build, secondary, turn_deg=-22):
-    """Build the character, render every action (or the ones named on the
-    command line) and write actions.json. secondary(act, f) returns extra pose
-    channels (follow-through) for frame f."""
+def setup(build, turn_deg):
+    """Fresh scene with the character built and its rest pose recorded."""
     reset_scene()
     turn = J["turn"] = joint("turn")     # 3/4 view; characters parent their root to it
     turn.rotation_euler = (0, 0, math.radians(turn_deg))
@@ -237,6 +235,13 @@ def run(build, secondary, turn_deg=-22):
     for n, j in J.items():
         REST[n] = tuple(j.location)
         REST_ROT[n] = tuple(j.rotation_euler)
+
+
+def run(build, secondary, turn_deg=-22):
+    """Build the character, render every action (or the ones named on the
+    command line) and write actions.json. secondary(act, f) returns extra pose
+    channels (follow-through) for frame f."""
+    setup(build, turn_deg)
     raw = os.path.join(OUT, "raw")
     os.makedirs(raw, exist_ok=True)
     meta = {}
@@ -253,3 +258,55 @@ def run(build, secondary, turn_deg=-22):
     palette = [{"name": n, "render": [srgb(c) for c in rgb], "out": out} for n, (rgb, out) in COLOURS.items()]
     with open(os.path.join(OUT, "actions.json"), "w") as fp:
         json.dump({"palette": palette, "actions": meta}, fp, indent=1)
+
+
+# --- paper-doll parts ----------------------------------------------------------
+
+def project(joint_name):
+    """Canvas position (1x pixels, origin top-left) of a joint, as rendered."""
+    from bpy_extras.object_utils import world_to_camera_view
+    bpy.context.view_layer.update()
+    sc = bpy.context.scene
+    co = world_to_camera_view(sc, sc.camera, J[joint_name].matrix_world.translation)
+    return (round(co.x * CANVAS_W, 2), round((1 - co.y) * CANVAS_H, 2))
+
+
+def show_only(joints):
+    """Render only meshes whose parent joint is in `joints`."""
+    names = {J[j].name for j in joints}
+    for o in bpy.context.scene.objects:
+        if o.type == "MESH":
+            o.hide_render = o.parent is None or o.parent.name not in names
+
+
+def render_parts(build, turn_deg, parts):
+    """parts: list of dicts with name, joints (meshes to show), pivot (joint),
+    anchors {child part: joint}, axes [{name, values}], pose(values) -> pose.
+    Renders every combination of axis values (row-major, first axis slowest)
+    to <out>/raw/<part>_NNN.png and writes <out>/parts.json."""
+    import itertools
+    setup(build, turn_deg)
+    raw = os.path.join(OUT, "raw")
+    os.makedirs(raw, exist_ok=True)
+    out = []
+    for part in parts:
+        if ONLY and part["name"] not in ONLY:
+            continue
+        show_only(part["joints"])
+        images = []
+        combos = list(itertools.product(*[ax["values"] for ax in part["axes"]]))
+        for i, values in enumerate(combos):
+            apply(part["pose"](*values))
+            fname = f"{part['name']}_{i:03d}.png"
+            render(os.path.join(raw, fname))
+            images.append({"file": fname, "values": list(values),
+                           "pivot": project(part["pivot"]),
+                           "anchors": {c: project(j) for c, j in part.get("anchors", {}).items()}})
+        out.append({"name": part["name"], "parent": part.get("parent"),
+                    "axes": [{k: v for k, v in ax.items()} for ax in part["axes"]],
+                    "images": images})
+        print(f"rendered {part['name']}: {len(images)} images")
+    palette = [{"name": n, "render": [srgb(c) for c in rgb], "out": out_hex}
+               for n, (rgb, out_hex) in COLOURS.items()]
+    with open(os.path.join(OUT, "parts.json"), "w") as fp:
+        json.dump({"palette": palette, "canvas": [CANVAS_W, CANVAS_H], "parts": out}, fp, indent=1)
