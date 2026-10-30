@@ -5,6 +5,9 @@
 #include "gen/doll_moves.h"
 #include "gen/doll_pixels.h"
 namespace art = doll_gen;
+#if __has_include("gen/scene.h")
+#include "gen/scene.h"
+#endif
 #else
 #include "gen/pose_meta.h"
 #include "gen/pose_pixels.h"
@@ -37,15 +40,41 @@ void RendererTft::begin() {
 #if PEDALPETS_PAL4
   for (int i = 0; i < 16; i++) palette_[i] = (art::PALETTE[i] >> 8) | (art::PALETTE[i] << 8);
 #endif
+#if PEDALPETS_SCENE
+  for (int i = 0; i < 16; i++)
+    leafPalette_[i] = (scene_gen::LEAF_PALETTE[i] >> 8) | (scene_gen::LEAF_PALETTE[i] << 8);
+#endif
 }
 
 void RendererTft::background() {
+#if PEDALPETS_SCENE
+  memcpy_P(canvas_.getPointer(), scene_gen::BACKDROP, sizeof(scene_gen::BACKDROP));
+#else
   canvas_.fillSprite(art::BG_COLOR);
   if (HAS_SUN) canvas_.fillCircle(SUN_X, SUN_Y, SUN_R, art::SUN_COLOR);
+#endif
+}
+
+void RendererTft::drawLeaves(const LeafField* leaves, bool front) {
+#if PEDALPETS_SCENE
+  if (!leaves) return;
+  for (int i = 0; i < leaves->count(); i++) {
+    if (leaves->inFront(i, scene_gen::FEET_Y) != front) continue;
+    const Leaf& l = leaves->leaf(i);
+    int s = scene_gen::leafSprite(l.colour, leaves->rotation(i, scene_gen::LEAF_ROTATIONS), leaves->edgeOn(i));
+    int w = scene_gen::LEAF_SIZES[s][0], h = scene_gen::LEAF_SIZES[s][1];
+    blitPal4(scene_gen::LEAF_PIXELS[s], w, h, (int)lroundf(l.x) - w / 2, (int)lroundf(l.y) - h + 1, false,
+             leafPalette_);
+  }
+#else
+  (void)leaves; (void)front;
+#endif
 }
 
 // 4-bit palette pixels straight into the sprite buffer; index 0 is transparent.
-void RendererTft::blitPal4(const uint8_t* src, int w, int h, int x0, int y0, bool flip) {
+void RendererTft::blitPal4(const uint8_t* src, int w, int h, int x0, int y0, bool flip,
+                           const uint16_t* palette) {
+  const uint16_t* pal = palette ? palette : palette_;
   uint16_t* buf = (uint16_t*)canvas_.getPointer();
   int stride = (w + 1) / 2;
   for (int r = 0; r < h; r++) {
@@ -56,7 +85,7 @@ void RendererTft::blitPal4(const uint8_t* src, int w, int h, int x0, int y0, boo
     for (int c = 0; c < w; c++) {
       uint8_t idx = (c & 1) ? (row[c >> 1] & 0x0F) : (row[c >> 1] >> 4);
       int sx = flip ? x0 + w - 1 - c : x0 + c;
-      if (idx && sx >= 0 && sx < SCREEN_W) dst[sx] = palette_[idx];
+      if (idx && sx >= 0 && sx < SCREEN_W) dst[sx] = pal[idx];
     }
   }
 }
@@ -77,13 +106,15 @@ void RendererTft::finish(const HudInfo* hud) {
 
 #if PEDALPETS_DOLL
 void RendererTft::drawDoll(const DollPlacement* parts, const MarkPlacement* marks, int markCount,
-                           const HudInfo* hud) {
+                           const LeafField* leaves, const HudInfo* hud) {
   background();
+  drawLeaves(leaves, false);                   // leaves behind the pet
   for (int i = 0; i < art::DOLL.partCount; i++) {
     const DollPlacement& p = parts[art::DOLL.drawOrder[i]];
     const DollImage& im = art::IMAGES[p.image];
     blitPal4(art::PIXELS[p.image], im.w, im.h, CANVAS_X + p.x, CANVAS_Y + p.y, p.flip);
   }
+  drawLeaves(leaves, true);                    // leaves in front of it
   for (int i = 0; i < markCount; i++) {        // expression marks on top, never mirrored
     const MarkSize& sz = art::MARK_SIZES[marks[i].image];
     blitPal4(art::MARK_PIXELS[marks[i].image], sz.w, sz.h, CANVAS_X + marks[i].x, CANVAS_Y + marks[i].y);

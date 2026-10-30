@@ -3,6 +3,7 @@ range, with 2D attachment points. See docs/superpowers/specs/2026-10-30-paper-do
 
   /Applications/Blender.app/Contents/MacOS/Blender -b -P art/blender/jay_doll.py -- <out_dir> [part ...]
 """
+import math
 import os
 import sys
 
@@ -67,9 +68,22 @@ def look(l):
     return (0.7 * max(-30, min(30, l)), l)
 
 
-def legs_pose(v):
-    h, s, lift = LEGS[v][1]
-    return {"legs": {"l": (0, 0, h - HIP), "s": (1, 1, s)}, "feet": {"l": (0, 0, lift)}}
+STRIDE_DEG = 28     # leg swing at stride +-1
+STRIDES = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1]   # 7° apart: feet move ~2 px per image
+
+
+def legs_pose(v, stride):
+    """Bend (crouch/tuck) and stride (+ = near leg forward). The hip drops as
+    the legs spread so both feet stay on the ground: a natural walking bob."""
+    h, s, _lift = LEGS[v][1]
+    a = STRIDE_DEG * stride
+    if v >= 0:                         # standing: keep the feet on the ground
+        h = h * math.cos(math.radians(abs(a)))
+    feet = {"r": (0, 0, 0), "s": (1, 1, 1 / s)}
+    return {"legs": {"l": (0, 0, h - HIP), "s": (1, 1, s)},
+            "legL": {"r": (-a, 0, 0)}, "legR": {"r": (a, 0, 0)},
+            "footL": {"r": (a, 0, 0), **{k: v2 for k, v2 in feet.items() if k == "s"}},
+            "footR": {"r": (-a, 0, 0), **{k: v2 for k, v2 in feet.items() if k == "s"}}}
 
 
 def body_pose(lean, shape):
@@ -106,7 +120,7 @@ def wing_pose(side):
 
 # Channels the device animates (tools/build_doll.py turns these into an enum).
 CHANNELS = ["hop", "legs", "lean", "squash", "pitch", "look", "eyes", "jaw", "crest", "tail",
-            "flapL", "flapR", "x", "face"]   # x: stage position (px); face: < 0 mirrored
+            "flapL", "flapR", "x", "face", "stride"]   # x: stage position (px); face: < 0 mirrored
 
 
 def axis(name, values, sources, labels=None):
@@ -118,8 +132,9 @@ def axis(name, values, sources, labels=None):
 
 
 PARTS = [
-    {"name": "legs", "joints": ["legs", "feet"], "pivot": "root", "anchors": {"body": "legs"},
-     "axes": [axis("bend", list(LEGS), ["legs"], [v[0] for v in LEGS.values()])], "pose": legs_pose},
+    {"name": "legs", "joints": ["legs", "legR", "legL", "footR", "footL"], "pivot": "root", "anchors": {"body": "legs"},
+     "axes": [axis("bend", list(LEGS), ["legs"], [v[0] for v in LEGS.values()]),
+              axis("stride", STRIDES, ["stride"])], "pose": legs_pose},
     {"name": "body", "parent": "legs", "joints": ["hips"], "pivot": "hips",
      "anchors": {"head": "head", "wingR": "shoulderR", "wingL": "shoulderL", "tail": "tail"},
      "axes": [axis("lean", LEANS, ["lean"]),

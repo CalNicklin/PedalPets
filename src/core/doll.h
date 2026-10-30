@@ -52,3 +52,6 @@ struct DollPlacement { uint16_t image; int16_t x, y; bool flip; };
 
 // Fills out[partCount], indexed like tables.parts.
 void composeDoll(const DollTables& t, const DollPose& p, DollPlacement* out);
+
+// Canvas position of a placed part's pivot (e.g. the feet for the ground part).
+void pivotOnCanvas(const DollTables& t, const DollPlacement& p, int* x, int* y);

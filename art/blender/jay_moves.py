@@ -2,7 +2,7 @@
 
 Pure Python (no Blender): tools/build_moves.py turns this into
 src/gen/doll_moves.h. Channels and units (see jay_doll.py):
-  hop px · legs -1 tuck (airborne)/0 stand/1 crouch/2 low · lean° (+forward)
+  hop px · legs -1 tuck (airborne)/0 stand/1 crouch/2 low · stride -1..1 (+ near leg forward) · lean° (+forward)
   squash -1 stretch/0/1/2 big/3 fluff · pitch° (+down) · look° · eyes -1 wide/0/1 half/2 closed
   jaw° (+open) · crest° (+flat back, - raised) · tail° (+up) · flapL/flapR° (0 folded .. 165 high V)
 
@@ -51,6 +51,25 @@ move("hop_fwd2", 36, hop=[(0, 0), (4, 0), (9, 6), (14, 0), (17, 0), (22, 6), (27
      legs=[(0, 0), (3, 0.75), (7, -1), (11, -1), (14, 0.5), (16, 0.5), (20, -1), (24, -1), (27, 0.6), (36, 0)],
      squash=[(0, 0), (3, 0.75), (8, -0.75), (14, 0.5), (16, 0.5), (21, -0.75), (27, 0.6), (36, 0)],
      x=[(0, 0), (4, 0), (14, 8), (17, 8), (27, 16), (36, 16)], **both([(0, 0), (8, 30), (14, 0), (21, 30), (27, 0)]))
+# Walking: a step every 10 frames; the hip dips as the legs spread (in the
+# art), the head nods a little on each step and the tail sways.
+def walk_keys(frames, steps, distance):
+    step = frames / steps
+    stride = [(0, 0)] + [(round(step * (i + 0.5)), 1 if i % 2 == 0 else -1) for i in range(steps)] + [(frames, 0)]
+    nod = [(0, 0)]
+    for i in range(steps):
+        nod += [(round(step * (i + 0.5)), 3), (round(step * (i + 1)), 0)]
+    sway = [(0, 0)] + [(round(step * (i + 1)), 5 if i % 2 == 0 else -4) for i in range(steps - 1)] + [(frames, 0)]
+    return {"stride": stride, "x": [(0, 0), (frames, distance)], "pitch": nod, "tail": sway}
+
+
+move("walk", 40, **walk_keys(40, 4, 18))
+move("walk_long", 60, **walk_keys(60, 6, 28), look=[(0, 0), (20, 0), (30, 15), (44, 15), (56, 0), (60, 0)])
+# Strut: two swaggering steps per beat, chest out, nodding on the beat.
+move("strut", 16, stride=[(0, 0), (4, 1), (12, -1), (16, 0)], x=[(0, 0), (16, 8)],
+     pitch=[(0, 0), (4, 12), (8, 0), (12, 12), (16, 0)], lean=[(0, 0), (4, -6), (12, -6), (16, 0)],
+     squash=[(0, 0), (4, 0.5), (8, 0), (12, 0.5), (16, 0)], look=[(0, 0), (6, 10), (12, 10), (16, 0)])
+
 move("turn_round", 20, flip_at=8, hop=[(0, 0), (3, 0), (8, 6), (13, 0), (20, 0)],
      legs=[(0, 0), (2, 0.75), (6, -1), (10, -1), (13, 0.6), (20, 0)],
      squash=[(0, 0), (2, 0.75), (8, -0.5), (13, 0.6), (20, 0)], **both([(0, 0), (7, 40), (13, 0)]))
@@ -151,11 +170,11 @@ VOCAB = {
     "Asleep":  [("breathe", 6, "idle"), ("twitch", 1, "idle")],
     "Curious": [("look_l", 3, "idle"), ("look_r", 3, "idle"), ("tilt", 2, "idle"), ("blink", 4, "idle"),
                 ("double_blink", 1, "idle"), ("crest_flick", 2, "idle"), ("preen", 1, "idle"),
-                ("tail_flick", 2, "idle"), ("hop_small", 1, "idle"), ("hop_fwd", 4, "idle"),
-                ("hop_fwd2", 1, "idle"), ("turn_round", 3, "idle"), ("shuffle", 1, "idle"),
+                ("tail_flick", 2, "idle"), ("hop_small", 1, "idle"), ("hop_fwd", 1, "idle"),
+                ("walk", 5, "idle"), ("walk_long", 2, "idle"), ("turn_round", 3, "idle"), ("shuffle", 1, "idle"),
                 ("peck", 2, "idle"), ("look_you", 2, "idle"), ("shake", 1, "idle")],
     "IntoIt":  [("nod", 4, "beat"), ("bob", 3, "beat"), ("side_nod", 2, "beat"), ("tail_pump", 2, "beat"),
-                ("wing_flick", 1, "beat"), ("shuffle", 1, "beat"), ("blink", 3, "idle"), ("crest_flick", 1, "idle"),
+                ("wing_flick", 1, "beat"), ("shuffle", 1, "beat"), ("strut", 3, "beat"), ("blink", 3, "idle"), ("crest_flick", 1, "idle"),
                 ("look_you", 1, "idle"), ("shake", 1, "idle"), ("turn_round", 1, "idle")],
     "Hyped":   [("hop_flap", 4, "beat"), ("headbang", 3, "beat"), ("flap_burst", 3, "beat"), ("rock", 2, "beat"),
                 ("hop_travel", 3, "beat"), ("turn_hop", 2, "beat"), ("blink", 2, "idle"), ("crest_flick", 1, "idle")],

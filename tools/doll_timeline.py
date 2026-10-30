@@ -26,7 +26,13 @@ JUMP_PX = 4      # a part's pivot moving this far in one frame reads as a jump
 
 
 class Art:
-    def __init__(self, doll_dir):
+    def __init__(self, doll_dir, scene_dir=None):
+        self.backdrop, self.leaves = None, []
+        if scene_dir:
+            sd = Path(scene_dir)
+            self.backdrop = Image.open(sd / "backdrop.png").convert("RGBA")
+            n = json.loads((sd / "scene.json").read_text())["leaves"]
+            self.leaves = [Image.open(sd / "leaves" / f"{i}.png").convert("RGBA") for i in range(n)]
         d = Path(doll_dir)
         meta = json.loads((d / "parts.json").read_text())
         self.canvas = meta["canvas"]
@@ -49,13 +55,25 @@ class Art:
             self.marks = [Image.open(d / "marks" / f"{n}.png").convert("RGBA")
                           for n in json.loads(mj.read_text())["images"]]
 
+    def draw_leaves(self, img, row, front):
+        for s, x, y, f in row["leaves"]:
+            if s < 0 or f != front:
+                continue
+            sp = self.leaves[s]
+            img.alpha_composite(sp, (x - sp.width // 2, y - sp.height + 1))
+
     def render(self, row):
-        img = Image.new("RGBA", (SCREEN_W, SCREEN_H), (*BG, 255))
-        ImageDraw.Draw(img).ellipse([80 - 36, 46 - 36, 80 + 36, 46 + 36], fill=SUN)
+        if self.backdrop:
+            img = self.backdrop.copy()
+        else:
+            img = Image.new("RGBA", (SCREEN_W, SCREEN_H), (*BG, 255))
+            ImageDraw.Draw(img).ellipse([80 - 36, 46 - 36, 80 + 36, 46 + 36], fill=SUN)
+        self.draw_leaves(img, row, 0)
         crops = self.flipped if row["flip"] else self.crops
         for i in self.order:
             n, x, y = row["parts"][i]
             img.alpha_composite(crops[n], (self.ox + x, self.oy + y))
+        self.draw_leaves(img, row, 1)
         for n, x, y in row["marks"]:
             img.alpha_composite(self.marks[n], (self.ox + x, self.oy + y))
         return img
@@ -75,12 +93,15 @@ def load(path):
         for r in csv.DictReader(f):
             n = sum(1 for k in r if k.startswith("p") and k.endswith("_img"))
             nm = sum(1 for k in r if k.startswith("m") and k.endswith("_img"))
+            nl = sum(1 for k in r if k.startswith("l") and k.endswith("_s"))
             rows.append({"t": int(r["t_ms"]), "mood": int(r["mood"]), "energy": r["energy"],
                          "reaction": r["reaction"], "frame_us": int(r["frame_us"]) if r["frame_us"] else None,
                          "flip": r.get("flip") == "1",
                          "parts": [(int(r[f"p{i}_img"]), int(r[f"p{i}_x"]), int(r[f"p{i}_y"])) for i in range(n)],
                          "marks": [(int(r[f"m{i}_img"]), int(r[f"m{i}_x"]), int(r[f"m{i}_y"]))
-                                   for i in range(nm) if int(r[f"m{i}_img"]) >= 0]})
+                                   for i in range(nm) if int(r[f"m{i}_img"]) >= 0],
+                         "leaves": [(int(r[f"l{i}_s"]), int(r[f"l{i}_x"]), int(r[f"l{i}_y"]), int(r[f"l{i}_f"]))
+                                    for i in range(nl)]})
     return rows
 
 
@@ -162,6 +183,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("timeline")
     ap.add_argument("doll_dir")
+    ap.add_argument("--scene", help="scene dir from tools/build_scene.py (e.g. art/scenes/forest)")
     ap.add_argument("--gif")
     ap.add_argument("--strip")
     ap.add_argument("--from", dest="t0", type=int, default=0)
@@ -169,7 +191,7 @@ def main():
     ap.add_argument("--scale", type=int, default=2)
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
-    art = Art(a.doll_dir)
+    art = Art(a.doll_dir, a.scene)
     rows = load(a.timeline)
     if not a.quiet:
         report(rows, art)

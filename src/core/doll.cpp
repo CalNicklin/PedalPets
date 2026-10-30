@@ -62,3 +62,10 @@ void composeDoll(const DollTables& t, const DollPose& p, DollPlacement* out) {
     }
   }
 }
+
+void pivotOnCanvas(const DollTables& t, const DollPlacement& p, int* x, int* y) {
+  const DollImage& im = t.images[p.image];
+  int px = roundQuarter(im.pivotX4) - im.x;   // pivot inside the crop
+  *x = p.x + (p.flip ? im.w - px : px);
+  *y = p.y + roundQuarter(im.pivotY4) - im.y;
+}

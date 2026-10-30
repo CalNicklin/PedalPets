@@ -20,13 +20,14 @@ lib.KEYED = ("root", "hips", "tail", "shoulderR", "shoulderL", "neck", "head", "
 
 def build_character():
     root = J["root"] = joint("root", J["turn"])
-    # Legs hang from the hip: scaling `legs` in z shortens them (crouch/tuck).
+    # Legs hang from the hip: scaling `legs` in z shortens them (crouch/tuck);
+    # each leg swings about its own hip joint (walking), its foot at the end.
     legs = J["legs"] = joint("legs", root, (0, 0, 0.34))
-    for side in (-1, 1):
-        cone(f"leg{side}", "grey", legs, (0.11 * side, 0.02, -0.17), 0.035, 0.03, 0.34)
-    feet = J["feet"] = joint("feet", root, (0, 0, 0))
-    for side in (-1, 1):
-        blob(f"foot{side}", "grey", feet, (0.11 * side, -0.06, 0.02), (0.07, 0.13, 0.03))
+    for side, name in ((-1, "R"), (1, "L")):
+        leg = J[f"leg{name}"] = joint(f"leg{name}", legs, (0.11 * side, 0.02, 0))
+        cone(f"leg{name}", "grey", leg, (0, 0, -0.17), 0.035, 0.03, 0.34)
+        foot = J[f"foot{name}"] = joint(f"foot{name}", leg, (0, -0.08, -0.32))
+        blob(f"foot{name}", "grey", foot, (0, 0, 0), (0.07, 0.13, 0.03))
 
     hips = J["hips"] = joint("hips", root, (0, 0, 0.34))
     blob("body", "blue", hips, (0, 0.05, 0.42), (0.4, 0.46, 0.48), rot=(-12, 0, 0))

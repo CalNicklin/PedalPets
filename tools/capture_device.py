@@ -50,14 +50,19 @@ def main():
     s.write(b"t" + a.keys.encode())
 
     rows, line, t = [], b"", time.time()
+    header_line = None
     while time.time() - t < a.seconds:
         line += s.read(4096)
         *done, line = line.split(b"\n")
+        for d in done:
+            if d.startswith(b"H,"):
+                header_line = d.decode(errors="replace").strip()[2:]
         rows += [d.decode(errors="replace").strip() for d in done if d[:2] in (b"T,", b"D,")]
     s.write(b"t")
     doll = rows and rows[0].startswith("D,")
     rows = [r[2:] for r in rows]
-    header = doll_header((rows[0].count(",") - 5) // 3 - MARKS) if doll else HEADER
+    header = header_line if doll and header_line else (doll_header((rows[0].count(",") - 5) // 3 - MARKS)
+                                                      if doll else HEADER)
     with open(a.out, "w") as f:
         f.write(header + "\n" + "\n".join(rows) + "\n")
     print(f"wrote {a.out} ({len(rows)} frames)")
