@@ -14,10 +14,11 @@ struct HudInfo {
 class RendererTft {
  public:
   void begin();
-  // The scene's backdrop and leaves, the character's parts back to front, its
-  // expression marks on top. scene == nullptr draws a plain background.
+  // The scene's backdrop, its crowd and leaves, the character's parts back to
+  // front, its expression marks on top. scene == nullptr draws a plain background.
   void drawDoll(const Character& c, const Scene* scene, const DollPlacement* parts, const MarkPlacement* marks,
-                int markCount, const LeafField* leaves, const HudInfo* hud);
+                int markCount, const LeafField* leaves, const struct CritterView* crowd, int crowdCount,
+                const HudInfo* hud);
 
  private:
   void background(const Scene* scene);
@@ -30,6 +31,8 @@ class RendererTft {
   TFT_eSprite      canvas_{&tft_};
   const Character* paletteFor_ = nullptr;
   const Scene*     leafPaletteFor_ = nullptr;
+  const Scene*     crowdPaletteFor_ = nullptr;
+  uint16_t         crowdPalette_[16] = {};
   uint16_t         palette_[16] = {};      // byte-swapped for direct sprite-buffer writes
   uint16_t         leafPalette_[16] = {};
 };

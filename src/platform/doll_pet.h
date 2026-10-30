@@ -4,6 +4,7 @@
 // on the ground. It knows nothing about any particular character or scene:
 // those come in as packs (core/pack.h) and can be swapped at run time.
 #include "core/choreo.h"
+#include "core/crowd.h"
 #include "core/doll.h"
 #include "core/leaves.h"
 #include "core/mind.h"
@@ -12,9 +13,12 @@
 
 constexpr int SCREEN_W = 160, SCREEN_H = 128;
 
+// A critter as drawn: sprite (into the scene's crowd pixels), top-left on screen, mirrored?
+struct CritterView { int8_t sprite; int16_t x, y; bool flip; };
+
 class DollPet {
  public:
-  DollPet(const Character& c, Rng& rng) : mind(rng), choreo(c.choreo, rng), rng_(rng), char_(&c) {}
+  DollPet(const Character& c, Rng& rng) : mind(rng), choreo(c.choreo, rng), crowd(rng), rng_(rng), char_(&c) {}
 
   void setCharacter(const Character& c) { char_ = &c; choreo.bind(c.choreo); }   // then reset()
   void setScene(const Scene* s) { scene_ = s; }                                   // then reset()
@@ -28,6 +32,7 @@ class DollPet {
     motion = PetMotionSensor();
     leaves.clear();
     if (scene_ && scene_->leafColours) leaves.scatter(rng_, leafCount, scene_->leafColours);
+    crowd.reset(scene_ ? scene_->crowdCount : 0, now);
     composeDoll(char_->doll, choreo.pose(), parts);
     markCount = 0;
     handsSeen_ = false;
@@ -36,6 +41,7 @@ class DollPet {
   // A music event (10 ms logic tick). The Mind may hold a sudden hit back for
   // a double-take; it comes out of tick() a moment later.
   void event(const MusicEvent& e, uint32_t now) {
+    crowd.onEvent(e, now);
     MoodChange c = mood.onEvent(e, now);
     if (c == MoodChange::Woke) { choreo.onMoodChange(c, mood.mood(), now); return; }  // waking eats the event
     if (mind.onEvent(e, mood.mood(), now)) choreo.onEvent(e, mood.mood(), now);
@@ -77,6 +83,23 @@ class DollPet {
                                 canvasX() + fx, canvasY() + fy);
     handCount_ = updateHands();
     leaves.step(rng_, m, hands_, handCount_);
+    crowd.tick(mood.mood(), mood.energy(), now);
+  }
+
+  // The crowd as drawn: each visible critter watching the pet. Returns how many.
+  int critters(CritterView* out) const {
+    if (!scene_ || !scene_->crowdCount) return 0;
+    Body b = head();
+    int n = 0;
+    for (int i = 0; i < crowd.count(); i++) {
+      CritterPose p = crowd.pose(i);
+      if (p == CritterPose::Hidden) continue;
+      const CrowdSpot& spot = scene_->crowd[i];
+      int sprite = spot.kind * CROWD_FRAMES + (p == CritterPose::Peek ? 0 : p == CritterPose::Up ? 1 : 2);
+      int w = scene_->crowdSizes[sprite][0], h = scene_->crowdSizes[sprite][1];
+      out[n++] = {(int8_t)sprite, (int16_t)(spot.x - w / 2), (int16_t)(spot.y - h + crowd.dip(i)), b.headX > spot.x};
+    }
+    return n;
   }
 
   const Hand* hands(int* count) const { *count = handCount_; return hands_; }   // this frame's hands
@@ -87,6 +110,7 @@ class DollPet {
   MoodModel       mood;
   Mind            mind;
   Choreographer   choreo;
+  Crowd           crowd;
   LeafField       leaves;
   PetMotionSensor motion;
   DollPlacement   parts[DOLL_MAX_PARTS];

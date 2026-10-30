@@ -54,6 +54,18 @@ def main():
                 sizes.append(im.size)
                 pix.append(ba.pack_pal4(im, pal, f"leaf {c}/{r}/{e}"))
 
+    # The crowd: critter sprites per kind (peek, up, cheer) and their spots.
+    crowd = mod.crowd_sprites() if hasattr(mod, "crowd_sprites") else {}
+    kinds = list(crowd)
+    cpal = [tuple(c) for c in getattr(mod, "CROWD_COLOURS", {}).values()]
+    cflat, csizes, cpix = [], [], []
+    for k in kinds:
+        for im in crowd[k]:
+            cflat.append(im)
+            csizes.append(im.size)
+            cpix.append(ba.pack_pal4(im, cpal, f"critter {k}"))
+    spots = [(x, y, kinds.index(kind)) for x, y, kind in getattr(mod, "CROWD", [])]
+
     raw = bg.tobytes()
     words = [swapped565(raw[i], raw[i + 1], raw[i + 2]) for i in range(0, len(raw), 3)]
     ns = f"{name}_scene"
@@ -68,8 +80,18 @@ def main():
         out.append(f"static const uint8_t LEAF_{i}[] = {{" + ", ".join(f"0x{v:02X}" for v in d) + "};")
     out.append("static const uint8_t* const LEAF_PIXELS[] = {" + ", ".join(f"LEAF_{i}" for i in range(len(pix))) + "};")
     out.append("static const uint8_t LEAF_SIZES[][2] = {" + ", ".join(f"{{{w}, {h}}}" for w, h in sizes) + "};")
+    if spots:
+        out.append("static const uint16_t CROWD_PALETTE[16] = {0x0000, " + ", ".join(ba.rgb565_hex(c) for c in cpal) + "};")
+        for i, d in enumerate(cpix):
+            out.append(f"static const uint8_t CRITTER_{i}[] = {{" + ", ".join(f"0x{v:02X}" for v in d) + "};")
+        out.append("static const uint8_t* const CROWD_PIXELS[] = {" + ", ".join(f"CRITTER_{i}" for i in range(len(cpix))) + "};")
+        out.append("static const uint8_t CROWD_SIZES[][2] = {" + ", ".join(f"{{{w}, {h}}}" for w, h in csizes) + "};")
+        out.append("static const CrowdSpot CROWD[] = {" + ", ".join(f"{{{x}, {y}, {k}}}" for x, y, k in spots) + "};")
+        crowd_fields = f"CROWD, {len(spots)}, CROWD_PALETTE, CROWD_PIXELS, CROWD_SIZES"
+    else:
+        crowd_fields = "nullptr, 0, nullptr, nullptr, nullptr"
     out += ["", f'static const Scene SCENE = {{"{name}", BACKDROP, {float(mod.FEET_Y)}f, {colours}, {rotations}, '
-            "LEAF_PALETTE, LEAF_PIXELS, LEAF_SIZES};", "", f"}}  // namespace {ns}", ""]
+            f"LEAF_PALETTE, LEAF_PIXELS, LEAF_SIZES, {crowd_fields}}};", "", f"}}  // namespace {ns}", ""]
     dest = OUT / "scenes" / name
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "scene.h").write_text("\n".join(out))
@@ -81,7 +103,10 @@ def main():
     bg.save(d / "backdrop.png")
     for i, im in enumerate(flat):
         im.save(d / "leaves" / f"{i}.png")
-    (d / "scene.json").write_text(json.dumps({"leaves": len(flat), "feet_y": mod.FEET_Y}))
+    (d / "crowd").mkdir(exist_ok=True)
+    for i, im in enumerate(cflat):
+        im.save(d / "crowd" / f"{i}.png")
+    (d / "scene.json").write_text(json.dumps({"leaves": len(flat), "feet_y": mod.FEET_Y, "crowd": len(cflat)}))
     print(f"build_scene: {name}: backdrop {len(words) * 2 // 1024} KB, {len(flat)} leaf sprites")
 
 

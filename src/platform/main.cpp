@@ -44,8 +44,11 @@ void frame(uint32_t t, uint32_t now) {
   int rx = pet.choreo.reaction();
   HudInfo info = {MOOD_NAMES[(int)pet.mood.mood()], pet.mood.energy(),
                   rx >= 0 ? pet.character().moveNames[rx] : nullptr, pet.mind.thought()};
+  CritterView crowd[CROWD_MAX];
+  int crowdCount = pet.critters(crowd);
   uint32_t start = micros();
-  renderer.drawDoll(pet.character(), scene, pet.parts, pet.marks, pet.markCount, &pet.leaves, hud ? &info : nullptr);
+  renderer.drawDoll(pet.character(), scene, pet.parts, pet.marks, pet.markCount, &pet.leaves, crowd, crowdCount,
+                    hud ? &info : nullptr);
   if (telemetry) {
     auto sprite = [scene](int i) {
       const Leaf& l = pet.leaves.leaf(i);
@@ -55,7 +58,7 @@ void frame(uint32_t t, uint32_t now) {
     dollTelemetryRow(line, sizeof(line), now, (int)pet.mood.mood(), pet.mood.energy(), info.reaction,
                      info.thought, (long)(micros() - start), pet.parts, pet.character().doll.partCount, pet.marks,
                      pet.markCount, scene && scene->leafColours ? &pet.leaves : nullptr,
-                     scene ? scene->feetY : 0, sprite);
+                     scene ? scene->feetY : 0, sprite, crowd, crowdCount);
     Serial.print("D,");
     Serial.println(line);
   }

@@ -70,13 +70,25 @@ void RendererTft::finish(const HudInfo* hud) {
 }
 
 void RendererTft::drawDoll(const Character& c, const Scene* scene, const DollPlacement* parts,
-                           const MarkPlacement* marks, int markCount, const LeafField* leaves, const HudInfo* hud) {
+                           const MarkPlacement* marks, int markCount, const LeafField* leaves,
+                           const CritterView* crowd, int crowdCount, const HudInfo* hud) {
   if (paletteFor_ != &c) {
     swapPalette(c.palette, palette_);
     paletteFor_ = &c;
   }
   const int cx = (SCREEN_W - c.canvasW) / 2, cy = SCREEN_H - c.canvasH;   // canvas bottom-centred
   background(scene);
+  if (scene && crowdCount) {                                 // the crowd, at the edges
+    if (crowdPaletteFor_ != scene) {
+      swapPalette(scene->crowdPalette, crowdPalette_);
+      crowdPaletteFor_ = scene;
+    }
+    for (int i = 0; i < crowdCount; i++) {
+      const CritterView& v = crowd[i];
+      blitPal4(scene->crowdPixels[v.sprite], scene->crowdSizes[v.sprite][0], scene->crowdSizes[v.sprite][1], v.x,
+               v.y, v.flip, crowdPalette_);
+    }
+  }
   if (scene && leaves) drawLeaves(*scene, *leaves, false);   // leaves behind the pet
   for (int i = 0; i < c.doll.partCount; i++) {
     const DollPlacement& p = parts[c.doll.drawOrder[i]];

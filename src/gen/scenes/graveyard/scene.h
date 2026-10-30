@@ -1353,7 +1353,14 @@ static const uint8_t LEAF_62[] = {0x00, 0x40, 0x00, 0x00, 0x44, 0x44, 0x40, 0x00
 static const uint8_t LEAF_63[] = {0x44, 0x00, 0x00, 0x00, 0x00, 0x44, 0x40, 0x00, 0x00, 0x00, 0x04, 0x40};
 static const uint8_t* const LEAF_PIXELS[] = {LEAF_0, LEAF_1, LEAF_2, LEAF_3, LEAF_4, LEAF_5, LEAF_6, LEAF_7, LEAF_8, LEAF_9, LEAF_10, LEAF_11, LEAF_12, LEAF_13, LEAF_14, LEAF_15, LEAF_16, LEAF_17, LEAF_18, LEAF_19, LEAF_20, LEAF_21, LEAF_22, LEAF_23, LEAF_24, LEAF_25, LEAF_26, LEAF_27, LEAF_28, LEAF_29, LEAF_30, LEAF_31, LEAF_32, LEAF_33, LEAF_34, LEAF_35, LEAF_36, LEAF_37, LEAF_38, LEAF_39, LEAF_40, LEAF_41, LEAF_42, LEAF_43, LEAF_44, LEAF_45, LEAF_46, LEAF_47, LEAF_48, LEAF_49, LEAF_50, LEAF_51, LEAF_52, LEAF_53, LEAF_54, LEAF_55, LEAF_56, LEAF_57, LEAF_58, LEAF_59, LEAF_60, LEAF_61, LEAF_62, LEAF_63};
 static const uint8_t LEAF_SIZES[][2] = {{7, 3}, {7, 1}, {7, 5}, {7, 3}, {5, 5}, {5, 5}, {5, 7}, {3, 7}, {3, 7}, {1, 7}, {5, 7}, {3, 7}, {5, 5}, {5, 5}, {7, 5}, {7, 3}, {7, 3}, {7, 1}, {7, 5}, {7, 3}, {5, 5}, {5, 5}, {5, 7}, {3, 7}, {3, 7}, {1, 7}, {5, 7}, {3, 7}, {5, 5}, {5, 5}, {7, 5}, {7, 3}, {7, 3}, {7, 1}, {7, 5}, {7, 3}, {5, 5}, {5, 5}, {5, 7}, {3, 7}, {3, 7}, {1, 7}, {5, 7}, {3, 7}, {5, 5}, {5, 5}, {7, 5}, {7, 3}, {7, 3}, {7, 1}, {7, 5}, {7, 3}, {5, 5}, {5, 5}, {5, 7}, {3, 7}, {3, 7}, {1, 7}, {5, 7}, {3, 7}, {5, 5}, {5, 5}, {7, 5}, {7, 3}};
+static const uint16_t CROWD_PALETTE[16] = {0x0000, 0x6249, 0xFF7E, 0x3905, 0xDE39, 0xBD1D};
+static const uint8_t CRITTER_0[] = {0x00, 0x11, 0x11, 0x00, 0x01, 0x22, 0x22, 0x10, 0x12, 0x32, 0x23, 0x21};
+static const uint8_t CRITTER_1[] = {0x00, 0x11, 0x11, 0x00, 0x01, 0x22, 0x22, 0x10, 0x12, 0x32, 0x23, 0x21, 0x12, 0x25, 0x52, 0x21, 0x12, 0x22, 0x22, 0x21, 0x12, 0x42, 0x24, 0x21, 0x12, 0x12, 0x21, 0x21, 0x01, 0x01, 0x10, 0x10};
+static const uint8_t CRITTER_2[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x11, 0x00, 0x11, 0x22, 0x22, 0x11, 0x12, 0x32, 0x23, 0x21, 0x12, 0x25, 0x52, 0x21, 0x12, 0x22, 0x22, 0x21, 0x12, 0x42, 0x24, 0x21, 0x12, 0x12, 0x21, 0x21, 0x01, 0x01, 0x10, 0x10};
+static const uint8_t* const CROWD_PIXELS[] = {CRITTER_0, CRITTER_1, CRITTER_2};
+static const uint8_t CROWD_SIZES[][2] = {{8, 3}, {8, 8}, {8, 9}};
+static const CrowdSpot CROWD[] = {{130, 92, 0}, {145, 98, 0}, {31, 96, 0}, {152, 88, 0}};
 
-static const Scene SCENE = {"graveyard", BACKDROP, 124.0f, 4, 8, LEAF_PALETTE, LEAF_PIXELS, LEAF_SIZES};
+static const Scene SCENE = {"graveyard", BACKDROP, 124.0f, 4, 8, LEAF_PALETTE, LEAF_PIXELS, LEAF_SIZES, CROWD, 4, CROWD_PALETTE, CROWD_PIXELS, CROWD_SIZES};
 
 }  // namespace graveyard_scene

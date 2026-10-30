@@ -93,11 +93,13 @@ int main(int argc, char** argv) {
     pet.tick(mock.features(now), now);
     if (++tickCount % TICKS_PER_FRAME != 0) continue;
     pet.frame(now);
+    CritterView crowd[CROWD_MAX];
+    int crowdCount = pet.critters(crowd);
     int rx = pet.choreo.reaction();
     dollTelemetryRow(line, sizeof(line), now, (int)pet.mood.mood(), pet.mood.energy(),
                      rx >= 0 ? character->moveNames[rx] : nullptr, pet.mind.thought(), -1, pet.parts, parts,
                      pet.marks, pet.markCount, scene && scene->leafColours ? &pet.leaves : nullptr,
-                     scene ? scene->feetY : 0, sprite);
+                     scene ? scene->feetY : 0, sprite, crowd, crowdCount);
     printf("%s", line);
     if (getenv("PEDALPETS_CHANNELS")) {   // debug: raw channel values after the parts
       for (int c = 0; c < character->doll.channelCount; c++)

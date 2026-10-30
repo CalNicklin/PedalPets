@@ -112,5 +112,26 @@ def draw(seed=11):
     return img
 
 
+# --- the crowd: little ghosts behind the headstones (see forest.py) ---------------
+CROWD_COLOURS = {"o": (78, 72, 96), "w": (240, 238, 248), "k": (40, 34, 56), "b": (200, 196, 222),
+                 "P": (236, 160, 190)}
+CRITTERS = {
+    "ghost": {"up": ["..oooo..",
+                     ".owwwwo.",
+                     "owkwwkwo",
+                     "owwPPwwo",
+                     "owwwwwwo",
+                     "owbwwbwo",
+                     "owowwowo",
+                     ".o.oo.o."], "peek": 3, "arms": [(0, 2), (0, 3), (7, 2), (7, 3)]},
+}
+CROWD = [(130, 92, "ghost"), (145, 98, "ghost"), (31, 96, "ghost"), (152, 88, "ghost")]
+
+
+def crowd_sprites():
+    import forest
+    return forest.crowd_sprites(CRITTERS, CROWD_COLOURS)
+
+
 if __name__ == "__main__":
     draw().save(sys.argv[1] if len(sys.argv) > 1 else "graveyard.png")

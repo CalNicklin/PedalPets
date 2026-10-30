@@ -32,6 +32,10 @@ struct Character {
   const uint8_t* const* markPixels;
 };
 
+// A critter's spot in the scene: centre x, bottom y (screen px), and its kind.
+struct CrowdSpot { int16_t x, y; uint8_t kind; };
+constexpr int CROWD_FRAMES = 3;   // per kind: peek, up, cheer (facing left)
+
 struct Scene {
   const char*            name;
   const uint16_t*        backdrop;          // 160x128 RGB565, byte-swapped for the sprite buffer
@@ -40,6 +44,11 @@ struct Scene {
   const uint16_t*        leafPalette;
   const uint8_t* const*  leafPixels;        // [(colour * rotations + rotation) * 2 + edgeOn]
   const uint8_t        (*leafSizes)[2];
+  const CrowdSpot*       crowd;             // the critters at the edges (crowdCount 0 = none)
+  uint8_t                crowdCount;
+  const uint16_t*        crowdPalette;
+  const uint8_t* const*  crowdPixels;       // [kind * CROWD_FRAMES + frame]
+  const uint8_t        (*crowdSizes)[2];
 };
 
 inline int leafSprite(const Scene& s, int colour, int rotation, bool edgeOn) {

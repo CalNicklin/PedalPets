@@ -135,6 +135,54 @@ def leaf_sprites():
     return out
 
 
+# --- the crowd: critters at the edges who come out for the music ------------------
+# Each faces left (flipped on the device to watch the pet). "up" is the critter
+# standing; "peek" shows its top `peek` rows (just ears and eyes); "cheer" adds
+# raised arms (the "arms" pixels, in outline colour).
+CROWD_COLOURS = {"o": (66, 56, 52), "g": (168, 158, 148), "P": (232, 150, 150), "k": (28, 24, 24),
+                 "w": (242, 236, 224), "f": (112, 172, 82), "F": (74, 120, 56), "y": (236, 214, 120)}
+CRITTERS = {
+    "mouse": {"up": [".o....o.",
+                     "oPo..oPo",
+                     ".oooooo.",
+                     "okgggggo",
+                     "oggggggo",
+                     ".owwwwo.",
+                     "..o..o.."], "peek": 4, "arms": [(0, 1), (0, 2), (7, 0), (7, 1)]},
+    "frog":  {"up": [".oo..oo.",
+                     "okyookyo",
+                     "offffffo",
+                     "offffffo",
+                     ".oFFFFo.",
+                     "oo....oo"], "peek": 2, "arms": [(0, 0), (1, 0), (6, 0), (7, 0)]},
+}
+# (centre x, bottom y, kind): on the bush tops and by the mushrooms; the middle stays open.
+CROWD = [(10, 97, "mouse"), (150, 97, "mouse"), (30, 114, "frog"), (118, 114, "frog")]
+
+
+def crowd_sprites(critters=None, colours=None):
+    """{kind: [peek, up, cheer]} RGBA sprites (this scene's critters by default)."""
+    critters = critters or CRITTERS
+    colours = colours or CROWD_COLOURS
+    out = {}
+    for kind, spec in critters.items():
+        rows = spec["up"]
+        w, h = len(rows[0]), len(rows)
+
+        def paint(rows, extra=()):
+            ex = 1 if extra else 0                  # a row above for raised arms
+            im = Image.new("RGBA", (w, len(rows) + ex), (0, 0, 0, 0))
+            for y, r in enumerate(rows):
+                for x, ch in enumerate(r):
+                    if ch != ".":
+                        im.putpixel((x, y + ex), (*colours[ch], 255))
+            for x, y in extra:
+                im.putpixel((x, y), (*colours["o"], 255))
+            return im
+        out[kind] = [paint(rows[:spec["peek"]]), paint(rows), paint(rows, spec["arms"])]
+    return out
+
+
 if __name__ == "__main__":
     import sys
     draw().save(sys.argv[1] if len(sys.argv) > 1 else "forest.png")

@@ -32,12 +32,14 @@ JUMP_PX = 4      # a part's pivot moving this far in one frame reads as a jump
 
 class Art:
     def __init__(self, doll_dir, scene_dir=None):
-        self.backdrop, self.leaves = None, []
+        self.backdrop, self.leaves, self.crowd = None, [], []
         if scene_dir:
             sd = Path(scene_dir)
             self.backdrop = Image.open(sd / "backdrop.png").convert("RGBA")
             n = json.loads((sd / "scene.json").read_text())["leaves"]
             self.leaves = [Image.open(sd / "leaves" / f"{i}.png").convert("RGBA") for i in range(n)]
+            nc = json.loads((sd / "scene.json").read_text()).get("crowd", 0)
+            self.crowd = [Image.open(sd / "crowd" / f"{i}.png").convert("RGBA") for i in range(nc)]
         d = Path(doll_dir)
         meta = json.loads((d / "parts.json").read_text())
         self.canvas = meta["canvas"]
@@ -73,6 +75,10 @@ class Art:
         else:
             img = Image.new("RGBA", (SCREEN_W, SCREEN_H), (*BG, 255))
             ImageDraw.Draw(img).ellipse([80 - 36, 46 - 36, 80 + 36, 46 + 36], fill=SUN)
+        for sp, x, y, f in row.get("crowd", []):
+            if sp >= 0 and self.crowd:
+                im = self.crowd[sp]
+                img.alpha_composite(ImageOps.mirror(im) if f else im, (x, y))
         self.draw_leaves(img, row, 0)
         crops = self.flipped if row["flip"] else self.crops
         for i in self.order:
@@ -101,6 +107,7 @@ def load(path):
             n = sum(1 for k in r if k.startswith("p") and k.endswith("_img"))
             nm = sum(1 for k in r if k.startswith("m") and k.endswith("_img"))
             nl = sum(1 for k in r if k.startswith("l") and k.endswith("_s"))
+            nc = sum(1 for k in r if k.startswith("c") and k.endswith("_s"))
             rows.append({"t": int(r["t_ms"]), "mood": int(r["mood"]), "energy": r["energy"],
                          "reaction": r["reaction"], "frame_us": int(r["frame_us"]) if r["frame_us"] else None,
                          "flip": r.get("flip") == "1",
@@ -108,7 +115,9 @@ def load(path):
                          "marks": [(int(r[f"m{i}_img"]), int(r[f"m{i}_x"]), int(r[f"m{i}_y"]))
                                    for i in range(nm) if int(r[f"m{i}_img"]) >= 0],
                          "leaves": [(int(r[f"l{i}_s"]), int(r[f"l{i}_x"]), int(r[f"l{i}_y"]), int(r[f"l{i}_f"]))
-                                    for i in range(nl)]})
+                                    for i in range(nl)],
+                         "crowd": [(int(r[f"c{i}_s"]), int(r[f"c{i}_x"]), int(r[f"c{i}_y"]), int(r[f"c{i}_f"]))
+                                   for i in range(nc)]})
     return rows
 
 
