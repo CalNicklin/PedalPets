@@ -42,3 +42,9 @@ def test_rules_stays_quiet_asleep_and_with_strangers():
     r = dr.Rules(seed=1)
     assert r.decide(summary(mood="Asleep", silence_s=10), MOVES) == {}
     assert r.decide(summary(familiarity=0.1, silence_s=10), MOVES) == {}
+
+
+def test_intents_only_while_quiet_and_only_the_suggestible_ones():
+    assert "intent" not in (dr.to_line({"intent": "Bored", "thought": "meh"}, MOVES, "Hyped") or "")
+    assert "intent=Bored" in dr.to_line({"intent": "Bored"}, MOVES, "Curious")
+    assert dr.to_line({"intent": "Investigate"}, MOVES, "Curious") is None

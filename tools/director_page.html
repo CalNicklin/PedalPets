@@ -1,0 +1,207 @@
+<title>Director Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column; a header with the run's numbers, the prompt behind a fold,
+   then a timeline where each moment is a row: time | the board | the director. */
+:root {
+  --bg: #f5f4f8;          /* a cool paper with a little dusk violet in it */
+  --panel: #ffffff;
+  --fg: #221d2e;
+  --muted: #6c6580;
+  --line: #e1dde9;
+  --dusk: #5a4590;        /* the board's voice: graveyard dusk */
+  --dusk-soft: #ece7f6;
+  --glow: #0f7f68;        /* the director's voice: the skeleton's pupils */
+  --glow-soft: #dff3ed;
+  --warn: #9a5b12;
+  --warn-soft: #f7ecdc;
+  --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Helvetica Neue", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #17141f; --panel: #201c2b; --fg: #ece8f4; --muted: #a39cb6; --line: #332d42;
+  --dusk: #b6a4ec; --dusk-soft: #2d2640; --glow: #7ff0d0; --glow-soft: #183a33;
+  --warn: #f0b46a; --warn-soft: #3a2c1a; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #17141f; --panel: #201c2b; --fg: #ece8f4; --muted: #a39cb6; --line: #332d42;
+  --dusk: #b6a4ec; --dusk-soft: #2d2640; --glow: #7ff0d0; --glow-soft: #183a33;
+  --warn: #f0b46a; --warn-soft: #3a2c1a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body); }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 64px; display: grid; gap: 28px; }
+h1 { font: 700 clamp(28px, 4vw, 40px)/1.1 var(--display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.lede { color: var(--muted); max-width: 64ch; margin: 8px 0 0; }
+.run { font: 13px var(--mono); color: var(--muted); margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.stat b { display: block; font: 600 24px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
+.stat.spoke b { color: var(--glow); }
+details.prompt { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+details.prompt summary { cursor: pointer; font-weight: 600; }
+details.prompt pre { white-space: pre-wrap; font: 13px/1.55 var(--mono); color: var(--fg); margin: 12px 0 0; overflow-x: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; color: var(--muted); align-items: center; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.controls button { font: 500 13px var(--body); padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--fg); cursor: pointer; }
+.controls button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.controls button:focus-visible, details summary:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+.cols { display: grid; grid-template-columns: 64px 1fr 1fr; gap: 0 18px; font: 600 11px var(--body); letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted); padding: 0 14px 6px; }
+.timeline { display: grid; gap: 8px; }
+.row { display: grid; grid-template-columns: 64px 1fr 1fr; gap: 10px 18px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px 14px; align-items: start; }
+.row.spoke { border-color: color-mix(in srgb, var(--glow) 45%, var(--line)); }
+.time { font: 500 14px var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); padding-top: 2px; }
+.voice { min-width: 0; display: grid; gap: 6px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font: 500 12px var(--body); padding: 2px 8px; border-radius: 999px; background: var(--dusk-soft); color: var(--dusk); }
+.tag.moment { background: var(--warn-soft); color: var(--warn); }
+.tag.dir { background: var(--glow-soft); color: var(--glow); }
+.tag.plain { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+.thought { font-size: 16px; }
+.thought.pet { color: var(--fg); }
+.thought.claude { color: var(--glow); font-weight: 500; }
+.thought::before { content: "\201C"; } .thought::after { content: "\201D"; }
+.note { font-size: 13px; color: var(--muted); }
+.raw { font: 12px/1.5 var(--mono); color: var(--muted); overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+.ok { color: var(--glow); font-weight: 600; }
+.cols .c-board, .tag.board { color: var(--dusk); }
+@media (max-width: 640px) {
+  .cols { display: none; }
+  .row { grid-template-columns: 1fr; }
+  .voice.dir { border-top: 1px dashed var(--line); padding-top: 8px; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Director Log</h1>
+    <p class="lede">A run of the pet with the director switched on. On the left is what the board reported every few seconds and
+      at each moment: its mood and its own thought. On the right is what the director did with it. It either held back, asked
+      the model and stayed quiet, or suggested something. Every suggestion is checked before it reaches the board, and
+      &ldquo;applied&rdquo; means the board took it.</p>
+    <div class="run" id="run"></div>
+  </header>
+
+  <section class="stats" id="stats" aria-label="The run in numbers"></section>
+
+  <details class="prompt" id="prompt-box">
+    <summary>What the model was told</summary>
+    <pre id="prompt"></pre>
+  </details>
+
+  <section style="display:grid; gap:12px">
+    <div class="legend">
+      <span><i style="background:var(--dusk)"></i>the board (the pet on its own)</span>
+      <span><i style="background:var(--warn)"></i>a moment (a hit, waking, the music stopping)</span>
+      <span><i style="background:var(--glow)"></i>the director's addition</span>
+    </div>
+    <div class="controls" role="group" aria-label="Show">
+      <button id="show-all" aria-pressed="true">Every moment</button>
+      <button id="show-spoke" aria-pressed="false">Only when it spoke</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="cols"><span>Time</span><span class="c-board">The board</span><span>The director</span></div>
+    <div class="timeline" id="timeline"></div>
+  </section>
+</div>
+
+<script>
+const DATA = /*DATA*/null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const MOOD = { Asleep: "asleep", Curious: "quiet / curious", IntoIt: "grooving", Hyped: "hyped" };
+
+function header() {
+  const s = DATA.start || {};
+  const first = DATA.rows[0]?.summary || {};
+  $("run").innerHTML = [
+    `character: ${esc(first.character || "?")}`,
+    `director: ${esc(s.backend || "?")}${s.model ? " (" + esc(s.model) + ")" : ""}`,
+    `keys: ${esc(s.keys || "-")}`,
+    `held back unless ${esc(s.quiet_s ?? "?")} s had passed or something happened`,
+    `log: ${esc(DATA.name)}`,
+  ].map((x) => `<span>${x}</span>`).join("");
+  const st = DATA.stats;
+  const tiles = [
+    ["", st.summaries, "moments reported"],
+    ["", st.asked, "times it asked the model"],
+    ["spoke", st.spoke, "suggestions sent"],
+    ["", st.quiet, "chose to stay quiet"],
+    ["", st.held, "held back (too soon)"],
+    ["", st.median_ms != null ? (st.median_ms / 1000).toFixed(1) + " s" : "-", "typical reply time"],
+    ["", st.tokens_in ? `${(st.tokens_in / 1000).toFixed(1)}k / ${st.tokens_out}` : "-", "tokens in / out"],
+  ];
+  $("stats").innerHTML = tiles.map(([cls, v, label]) => `<div class="stat ${cls}"><b>${esc(v)}</b><span>${esc(label)}</span></div>`).join("");
+  if (DATA.prompt) $("prompt").textContent = DATA.prompt.system;
+  else $("prompt-box").hidden = true;
+}
+
+function parseSent(line) {
+  const out = {};
+  (line || "").replace(/^#D /, "").split(";").forEach((kv) => {
+    const i = kv.indexOf("=");
+    if (i > 0) out[kv.slice(0, i)] = kv.slice(i + 1);
+  });
+  return out;
+}
+
+function directorCell(r) {
+  if (r.status === "held") return `<div class="tags"><span class="tag plain">held back</span></div><div class="note">${esc(r.why)}</div>`;
+  if (r.status === "error") return `<div class="tags"><span class="tag moment">no answer</span></div><div class="note">${esc(r.why)}</div>`;
+  const parts = [];
+  if (r.status === "spoke") {
+    const d = parseSent(r.sent);
+    const tags = [];
+    if (d.move) tags.push(`<span class="tag dir">move: ${esc(d.move)}</span>`);
+    if (d.look) tags.push(`<span class="tag dir">looks at you</span>`);
+    if (d.intent) tags.push(`<span class="tag dir">wants: ${esc(d.intent)}</span>`);
+    if (d.for) tags.push(`<span class="tag plain">for ${esc(d.for / 1000)} s</span>`);
+    tags.push(r.applied ? `<span class="tag plain ok">applied ✓</span>` : `<span class="tag plain">not confirmed</span>`);
+    if (d.thought) parts.push(`<div class="thought claude">${esc(d.thought)}</div>`);
+    parts.push(`<div class="tags">${tags.join("")}</div>`);
+  } else if (r.status === "quiet") {
+    parts.push(`<div class="tags"><span class="tag plain">asked, stayed quiet</span></div>`);
+  } else {
+    parts.push(`<div class="note">-</div>`);
+  }
+  if (r.reply) parts.push(`<div class="raw">model said: ${esc(r.reply.raw)}  · ${esc(r.reply.ms)} ms</div>`);
+  return parts.join("");
+}
+
+function render(onlySpoke) {
+  $("timeline").innerHTML = DATA.rows
+    .filter((r) => !onlySpoke || r.status === "spoke")
+    .map((r) => {
+      const s = r.summary;
+      const tags = [`<span class="tag board">${esc(MOOD[s.mood] || s.mood)}</span>`];
+      if (s.moment) tags.push(`<span class="tag moment">${esc(s.moment)}</span>`);
+      if (s.notes || s.hits) tags.push(`<span class="tag plain">${s.notes} notes${s.hits ? ", " + s.hits + " hits" : ""}</span>`);
+      if (!s.notes && s.silence_s > 1) tags.push(`<span class="tag plain">silent ${Math.round(s.silence_s)} s</span>`);
+      return `<article class="row ${r.status}">
+        <div class="time">${(s.t / 1000).toFixed(1)}s</div>
+        <div class="voice board"><div class="tags">${tags.join("")}</div><div class="thought pet">${esc(s.thought)}</div>
+          <div class="note">familiarity ${esc(s.familiarity)}</div></div>
+        <div class="voice dir">${directorCell(r)}</div>
+      </article>`;
+    }).join("");
+}
+
+function select(onlySpoke) {
+  $("show-all").setAttribute("aria-pressed", String(!onlySpoke));
+  $("show-spoke").setAttribute("aria-pressed", String(onlySpoke));
+  render(onlySpoke);
+}
+$("show-all").addEventListener("click", () => select(false));
+$("show-spoke").addEventListener("click", () => select(true));
+header();
+render(false);
+</script>
