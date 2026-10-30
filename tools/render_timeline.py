@@ -7,7 +7,7 @@
 report how smooth it is.
 
 Usage:
-  uv run tools/render_timeline.py timeline.csv [--gif out.gif]
+  uv run tools/render_timeline.py timeline.csv [--manifest art/x.toml] [--gif out.gif]
          [--strip out.png --from MS --to MS] [--scale N]
 
 Timeline CSV columns: t_ms,pose,eye,mood,energy,reaction,step,frame_us
@@ -34,10 +34,15 @@ SNAP_PX = 6          # pose-to-pose feet shift that reads as a jump
 FEET_ROWS = 12       # bottom rows of a pose used to locate its feet
 
 
-def load_poses():
+SUN = (SCREEN_W // 2, 46, 36)   # mirrors renderer_tft.cpp
+BG = {}
+
+
+def load_poses(manifest):
     """Pose names and images; each pose's x/y is made screen-relative,
     mirroring renderer_tft.cpp (canvas centred, bottom-aligned)."""
-    m = tomllib.loads(ba.MANIFEST.read_text())
+    m = tomllib.loads(Path(manifest).read_text())
+    BG.update(ba.background(m))
     lay = ba.layout(m)
     cx, cy = (SCREEN_W - lay["w"]) // 2, SCREEN_H - lay["h"]
     raw = ba.collect_poses(m)
@@ -79,9 +84,12 @@ def draw_eyes(d, cx, cy, eye):
 
 
 def render(row, poses):
-    img = Image.new("RGB", (SCREEN_W, SCREEN_H), (0, 0, 0))
+    img = Image.new("RGB", (SCREEN_W, SCREEN_H), BG["color"])
+    if BG["sun"]:
+        x, y, r = SUN
+        ImageDraw.Draw(img).ellipse([x - r, y - r, x + r, y + r], fill=BG["sun"])
     p = poses[row["pose"]]
-    img.paste(p["image"], (p["sx"], p["sy"]))
+    img.paste(p["rgba"], (p["sx"], p["sy"]), p["rgba"])
     if p["ex"] != -1:
         draw_eyes(ImageDraw.Draw(img), p["sex"], p["sey"], row["eye"])
     return img
@@ -151,9 +159,10 @@ def report(rows, names, poses):
     # Glitch: a pose on screen for a single frame at a boundary (reaction or
     # mood change), i.e. something that flashes up and vanishes.
     # (An idle pose cut short by a reaction starting is fine: reactions must be instant.)
+    # Only meaningful where the neighbours are held longer (on-ones art is all single frames).
     glitches = [(s, names[p]) for (s, e, p, rx), prev, nxt in zip(segs[1:-1], segs, segs[2:])
-                if e - s <= 40 and (prev[3] != rx or nxt[3] != rx)
-                and not (rx == "-" and nxt[3] != "-")]
+                if e - s <= 40 and prev[1] - prev[0] > 60 and nxt[1] - nxt[0] > 60
+                and (prev[3] != rx or nxt[3] != rx) and not (rx == "-" and nxt[3] != "-")]
     print(f"single-frame glitches at boundaries: {len(glitches)}")
     for t, n in glitches[:5]:
         print(f"  {t:>6} ms  {n}")
@@ -168,6 +177,8 @@ def report(rows, names, poses):
     for d, t, a, b, rx in sorted(jumps, reverse=True)[:8]:
         print(f"  {t:>6} ms  {a} -> {b}  {d:.0f}px  ({rx})")
 
+    pops(rows, names, poses)
+
     print("timeline:")
     prev_mood, prev_rx = None, None
     for r in rows:
@@ -178,6 +189,41 @@ def report(rows, names, poses):
             if r["reaction"] != "-":
                 print(f"  {r['t']:>6} ms    reaction {r['reaction']}")
             prev_rx = r["reaction"]
+
+
+def pops(rows, names, poses):
+    """Share of character pixels that change between consecutive frames.
+    Smooth motion changes a little each frame; a cut changes a lot at once."""
+    def mask(pose):
+        p = poses[pose]
+        m = Image.new("L", (SCREEN_W, SCREEN_H), 0)
+        m.paste(p["rgba"].getchannel("A"), (p["sx"], p["sy"]))
+        return m
+
+    cache, out = {}, []
+    for a, b in zip(rows, rows[1:]):
+        if a["pose"] == b["pose"]:
+            continue
+        key = (a["pose"], b["pose"])
+        if key not in cache:
+            ma, mb = mask(a["pose"]), mask(b["pose"])
+            union = Image.eval(Image.merge("RGB", (ma, mb, ma)).convert("L"), lambda v: v).getbbox()
+            ia, ib = ma.tobytes(), mb.tobytes()
+            both = sum(1 for x, y in zip(ia, ib) if x or y)
+            diff = sum(1 for x, y in zip(ia, ib) if (x > 127) != (y > 127))
+            cache[key] = diff / max(both, 1)
+        boundary = a["reaction"] != b["reaction"] or a["mood"] != b["mood"]
+        out.append((cache[key], b["t"], names[a["pose"]], names[b["pose"]],
+                    f"{a['reaction']} -> {b['reaction']}" if boundary else b["reaction"], boundary))
+    for label, sel in (("within animations", [o for o in out if not o[5]]),
+                       ("at boundaries (reaction start/end, mood change)", [o for o in out if o[5]])):
+        if not sel:
+            continue
+        vals = sorted(o[0] for o in sel)
+        print(f"silhouette change {label}: n={len(sel)} median {100 * vals[len(vals) // 2]:.0f}%  "
+              f"p95 {100 * vals[int(.95 * len(vals))]:.0f}%  max {100 * vals[-1]:.0f}%")
+        for v, t, a, b, rx, _ in sorted(sel, reverse=True)[:6]:
+            print(f"  {t:>6} ms  {a} -> {b}  {100 * v:.0f}%  ({rx})")
 
 
 def filmstrip(rows, poses, t0, t1, scale, out):
@@ -206,13 +252,14 @@ def gif(rows, poses, scale, out):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("timeline")
+    ap.add_argument("--manifest", default=str(ba.MANIFEST))
     ap.add_argument("--gif")
     ap.add_argument("--strip")
     ap.add_argument("--from", dest="t0", type=int, default=0)
     ap.add_argument("--to", dest="t1", type=int, default=10**9)
     ap.add_argument("--scale", type=int, default=2)
     a = ap.parse_args()
-    names, poses = load_poses()
+    names, poses = load_poses(a.manifest)
     rows = load_rows(a.timeline)
     report(rows, names, poses)
     if a.strip:

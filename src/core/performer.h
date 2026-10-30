@@ -28,7 +28,7 @@ class Performer {
 
   bool canInterrupt(Trigger t, uint32_t now) const;
   void start(int reaction, Trigger t, uint32_t now);
-  void extend(uint32_t now);                  // restart current step's hold
+  void extend(uint32_t now);                  // repeat loop section, else restart current hold
   void onEvent(EventType e);                  // feeds `until`
   void tick(Mood mood, float energy, uint32_t now);
 
@@ -49,6 +49,7 @@ class Performer {
   uint32_t stepStart_     = 0;
   uint32_t stepHold_      = 0;
   uint16_t seen_          = 0;   // eventBit()s seen since reaction start
+  bool     extendPending_ = false;
 
   uint16_t pose_ = 0;
   Eye      eyes_ = Eye::Auto;

@@ -41,11 +41,21 @@ struct Step {
 };
 
 struct Reaction {
-  Trigger  trigger;
-  uint8_t  moodMask;            // 0 = any mood, else OR of moodBit()
-  uint16_t cooldownMs;
-  uint16_t firstStep;           // index into ArtTables::steps
-  uint8_t  stepCount;
+  Trigger   trigger;
+  uint8_t   moodMask;           // 0 = any mood, else OR of moodBit()
+  uint16_t  cooldownMs;
+  uint16_t  firstStep;          // index into ArtTables::steps
+  uint8_t   stepCount;
+  // Optional loop section (steps loopFrom .. loopFrom+loopLen-1). It repeats
+  // when the reaction is extended, or while waiting for loopUntil (capped at
+  // loopMaxMs from reaction start). loopLen 0 = no loop section.
+  uint8_t   loopFrom, loopLen;
+  EventType loopUntil;
+  uint16_t  loopMaxMs;
+  // Matched entry: entry[pose] = step to start at when the reaction fires while
+  // `pose` is on screen, so it joins at its most similar frame instead of
+  // cutting to step 0. nullptr = always start at step 0.
+  const uint8_t* entry;
 };
 
 // Slice of idlePoses played as a continuous cycle; periodMs per pose at rest.

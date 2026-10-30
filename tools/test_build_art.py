@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
 import build_art as ba  # noqa: E402
@@ -19,7 +20,7 @@ def reaction(**overrides):
 def test_basic_reaction_defaults():
     steps, reactions = ba.build_reactions(reaction(), POSES)
     assert steps == ["{0, 100, 100, Eye::Auto, EventType::None, 5000}"]
-    assert reactions == [("r", "{Trigger::BigHit, 0, 1500, 0, 1}")]
+    assert reactions == [("r", "{Trigger::BigHit, 0, 1500, 0, 1, 0, 0, EventType::None, 5000, nullptr}")]
 
 
 def test_full_step_fields():
@@ -28,7 +29,7 @@ def test_full_step_fields():
                  moods=["IntoIt", "Hyped"], cooldown=800)
     steps, reactions = ba.build_reactions(m, POSES)
     assert steps == ["{POSE_CURRENT, 100, 200, Eye::Wide, EventType::SustainEnd, 900}"]
-    assert reactions == [("r", "{Trigger::BigHit, 12, 800, 0, 1}")]
+    assert reactions == [("r", "{Trigger::BigHit, 12, 800, 0, 1, 0, 0, EventType::None, 5000, nullptr}")]
 
 
 def test_unknown_pose():
@@ -121,3 +122,57 @@ def test_sheet_poses_expand():
     poses = ba.collect_poses(m)
     assert list(poses) == ["idle_0", "idle_2"]
     assert poses["idle_2"]["src"] == f"{IDLE_SHEET}#2"
+
+
+def test_reaction_loop_fields():
+    m = reaction(steps=[{"pose": "a", "hold": 30}] * 4, loop_from=1, loop_len=2,
+                 loop_until="SustainEnd", loop_max=6000)
+    _, reactions = ba.build_reactions(m, POSES)
+    assert reactions == [("r", "{Trigger::BigHit, 0, 1500, 0, 4, 1, 2, EventType::SustainEnd, 6000, nullptr}")]
+
+
+def test_reaction_loop_must_fit_steps():
+    m = reaction(steps=[{"pose": "a", "hold": 30}] * 2, loop_from=1, loop_len=2)
+    with pytest.raises(ba.ArtError, match="loop"):
+        ba.build_reactions(m, POSES)
+
+
+def test_palette_parse_and_rgb565():
+    pal = ba.palette({"palette": {"colors": ["#000000", "#ff0000"]}})
+    assert pal == [(0, 0, 0), (255, 0, 0)]
+    assert ba.palette({}) is None
+    assert ba.to_rgb565(255, 0, 0) == 0x001F       # R/B swapped for the BGR panel
+
+
+def test_pal4_packing_and_transparency():
+    img = Image.new("RGBA", (3, 2), (0, 0, 0, 0))
+    img.putpixel((0, 0), (255, 0, 0, 255))
+    img.putpixel((2, 1), (0, 0, 0, 255))
+    data = ba.pack_pal4(img, [(0, 0, 0), (255, 0, 0)], "x")
+    # Row stride 2 bytes; index 0 = transparent, palette entries from 1.
+    assert data == [0x20, 0x00, 0x00, 0x10]
+
+
+def test_pal4_rejects_off_palette_colour():
+    img = Image.new("RGBA", (1, 1), (10, 200, 10, 255))
+    with pytest.raises(ba.ArtError, match="not in the palette"):
+        ba.pack_pal4(img, [(0, 0, 0)], "x")
+
+
+def test_entry_window_names_a_table():
+    m = reaction(steps=[{"pose": "a", "hold": 30}, {"pose": "b", "hold": 30}], entry_window=2)
+    _, reactions, entries = ba.build_reactions(m, POSES, with_entries=True)
+    assert reactions[0][1].endswith(", ENTRY_0}")
+    assert entries == [("ENTRY_0", [0, 1])]
+
+
+def test_entry_table_picks_most_similar_step():
+    def canvas(box):
+        img = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
+        img.paste((255, 0, 0, 255), box)
+        return img
+    imgs = [canvas((0, 0, 5, 10)),      # pose 0: left half
+            canvas((5, 0, 10, 10)),     # pose 1: right half
+            canvas((4, 0, 10, 10))]     # pose 2: nearly the right half
+    # Reaction steps show poses 0 then 1.
+    assert ba.entry_table(imgs, [0, 1]) == [0, 1, 1]

@@ -312,6 +312,22 @@ poses viewed on the TFT. Then full pack, 2 bpp storage, real eye set, and
 the deferred validator checks + contact sheet. Open: which image-to-3D /
 auto-rig route is fully hands-off (Mixamo has no API).
 
+### Spike results (2026-10-30)
+
+- `art/blender/pet.py` builds and animates a procedural Afro-Samurai-style
+  hype character (afro, red headband with trailing tails, kimono) headlessly;
+  `tools/build_pet.sh` renders → inks (`tools/ink.py`: palette snap + 1 px
+  ink lines) → writes `art/pet/manifest.toml` → regenerates firmware headers.
+- Motion: cubic splines through key poses; tails/afro follow-through derived
+  from body motion; everything rendered on ones (30 ms per frame).
+- Smooth transitions by construction: every loop and reaction starts/ends on
+  a shared hub pose; idle loops hand over only at loop end; reactions have
+  loop sections (extend / loop-until) and a **matched entry** table (start at
+  the reaction frame most like what's on screen).
+- Storage: 4-bit palette, index 0 transparent, over an off-white background
+  with a sun disc. 366 frames ≈ 1 MB; firmware 43% of the 3 MB partition.
+- Device: 33 pose changes/s, every frame on time, 0% judder.
+
 ## Sub-project 3 — Live signal detection (own spec later)
 
 Detectors for Pick / BigHit / Flurry / Sustain / Swell / Cut and `Features`

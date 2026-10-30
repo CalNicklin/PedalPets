@@ -5,7 +5,7 @@
 # ///
 """Build the firmware's pose / reaction / idle tables from art/manifest.toml.
 
-Usage:  uv run tools/build_art.py
+Usage:  uv run tools/build_art.py [manifest.toml]   (default art/manifest.toml)
 
 Emits:
   src/gen/pose_meta.h    plain C++ (core + tests can include it)
@@ -19,13 +19,16 @@ Optional manifest tables:
   [canvas]  w, h, baseline   pose canvas (default 96x112, feet at y=108)
   [sheets]  frame, feet      sheet frame size and the character's feet
                              [x, y] inside a frame; slices are centred there
+  [palette] colors           up to 15 "#rrggbb"; poses are then stored as 4-bit
+                             indices (0 = transparent) instead of RGB565
+  [background] color, sun    screen background and optional sun disc colour
 """
 
 import sys
 import tomllib
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "art" / "manifest.toml"
@@ -120,7 +123,44 @@ def process_pose(name, p, lay):
     rgb = flat.crop(box).tobytes()
     pixels = [to_rgb565(rgb[i], rgb[i + 1], rgb[i + 2]) for i in range(0, len(rgb), 3)]
     return {"x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0, "ex": ex, "ey": ey, "pixels": pixels,
-            "image": flat.crop(box)}
+            "image": flat.crop(box), "rgba": img.crop(box)}
+
+
+def hex_rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def palette(m):
+    """Palette colours from [palette] colors, or None for RGB565 art."""
+    cols = m.get("palette", {}).get("colors")
+    if cols is None:
+        return None
+    if not 1 <= len(cols) <= 15:
+        fail("palette: 1-15 colours (index 0 is transparent)")
+    return [hex_rgb(c) for c in cols]
+
+
+def pack_pal4(img, pal, name):
+    """4-bit indices, high nibble first, each row padded to whole bytes.
+    Index 0 is transparent; palette colour i is index i + 1."""
+    lookup = {c: i + 1 for i, c in enumerate(pal)}
+    w, h = img.size
+    raw = img.tobytes()
+    out = []
+    for y in range(h):
+        row = []
+        for x in range(w):
+            r, g, b, a = raw[(y * w + x) * 4:(y * w + x) * 4 + 4]
+            if a < 128:
+                row.append(0)
+            elif (r, g, b) in lookup:
+                row.append(lookup[(r, g, b)])
+            else:
+                fail(f"pose {name}: colour #{r:02x}{g:02x}{b:02x} at ({x},{y}) is not in the palette")
+        row += [0] * (len(row) % 2)
+        out += [(row[i] << 4) | row[i + 1] for i in range(0, len(row), 2)]
+    return out
 
 
 def parse_hold(h, where):
@@ -131,9 +171,10 @@ def parse_hold(h, where):
     fail(f"{where}: hold must be ms or [min, max] with min <= max")
 
 
-def build_reactions(m, pose_index):
-    """Return (step initialisers, [(id, reaction initialiser)])."""
-    steps, reactions = [], []
+def build_reactions(m, pose_index, with_entries=False):
+    """Return (step initialisers, [(id, reaction initialiser)]) and, with
+    with_entries, [(table name, pose index of each eligible entry step)]."""
+    steps, reactions, entries = [], [], []
     for r in m.get("reactions", []):
         rid = r.get("id") or fail("reaction without id")
         trig = r.get("trigger")
@@ -147,6 +188,7 @@ def build_reactions(m, pose_index):
         if not r.get("steps"):
             fail(f"reaction {rid}: no steps")
         first = len(steps)
+        step_poses = []
         for i, s in enumerate(r["steps"]):
             where = f"reaction {rid} step {i}"
             pose = s.get("pose")
@@ -154,6 +196,7 @@ def build_reactions(m, pose_index):
                 pid = "POSE_CURRENT"
             elif pose in pose_index:
                 pid = str(pose_index[pose])
+                step_poses.append(pose_index[pose])
             else:
                 fail(f"{where}: unknown pose {pose!r}")
             hmin, hmax = parse_hold(s.get("hold"), where)
@@ -166,8 +209,40 @@ def build_reactions(m, pose_index):
             until_max = s.get("until_max", DEFAULT_UNTIL_MAX)
             steps.append(f"{{{pid}, {hmin}, {hmax}, Eye::{eyes}, EventType::{until}, {until_max}}}")
         cooldown = r.get("cooldown", DEFAULT_COOLDOWN)
-        reactions.append((rid, f"{{Trigger::{trig}, {mask}, {cooldown}, {first}, {len(r['steps'])}}}"))
-    return steps, reactions
+        loop_from, loop_len = r.get("loop_from", 0), r.get("loop_len", 0)
+        if loop_len and not (0 <= loop_from and loop_from + loop_len <= len(r["steps"])):
+            fail(f"reaction {rid}: loop_from/loop_len outside its {len(r['steps'])} steps")
+        loop_until = r.get("loop_until", "None")
+        if loop_until != "None" and loop_until not in EVENTS:
+            fail(f"reaction {rid}: unknown loop_until event {loop_until!r}")
+        loop_max = r.get("loop_max", DEFAULT_UNTIL_MAX)
+        window = r.get("entry_window", 0)
+        entry = "nullptr"
+        if window:
+            if len(step_poses) != len(r["steps"]) or window > len(step_poses):
+                fail(f"reaction {rid}: entry_window needs that many plain pose steps (no @current)")
+            entry = f"ENTRY_{len(entries)}"
+            entries.append((entry, step_poses[:window]))
+        reactions.append((rid, f"{{Trigger::{trig}, {mask}, {cooldown}, {first}, {len(r['steps'])}, "
+                               f"{loop_from}, {loop_len}, EventType::{loop_until}, {loop_max}, {entry}}}"))
+    return (steps, reactions, entries) if with_entries else (steps, reactions)
+
+
+def entry_table(canvases, step_poses):
+    """For every pose, the entry step whose pose looks most like it (share of
+    differing pixels over the union of both silhouettes; ties -> earliest)."""
+    def distance(a, b):
+        diff = ImageChops.difference(a, b).convert("L").point(lambda v: 255 if v else 0)
+        union = ImageChops.lighter(a.getchannel("A"), b.getchannel("A")).point(lambda v: 255 if v else 0)
+        return diff.histogram()[255] / max(1, union.histogram()[255])
+
+    cache = {}
+    table = []
+    for p, img in enumerate(canvases):
+        best = min(range(len(step_poses)),
+                   key=lambda i: (cache.setdefault((p, step_poses[i]), distance(img, canvases[step_poses[i]])), i))
+        table.append(best)
+    return table
 
 
 def build_idles(m, pose_index):
@@ -188,9 +263,13 @@ def build_idles(m, pose_index):
     return flat, loops
 
 
-def emit_meta(lay, poses, steps, reactions, idle_flat, idle_loops):
+def emit_meta(lay, poses, steps, reactions, idle_flat, idle_loops, entry_tables=()):
     out = [HEADER, "#pragma once", '#include "../core/art_tables.h"', "", "namespace gen {", ""]
     out += [f"constexpr int CANVAS_W = {lay['w']};", f"constexpr int CANVAS_H = {lay['h']};", ""]
+    for name, table in entry_tables:
+        out.append(f"static const uint8_t {name}[{len(table)}] = {{" + ", ".join(map(str, table)) + "};")
+    if entry_tables:
+        out.append("")
     out.append("static const PoseMeta POSES[] = {")
     for name, p in poses:
         out.append(f"  {{{p['x']}, {p['y']}, {p['w']}, {p['h']}, {p['ex']}, {p['ey']}}},  // {name}")
@@ -212,8 +291,30 @@ def emit_meta(lay, poses, steps, reactions, idle_flat, idle_loops):
     return "\n".join(out)
 
 
-def emit_pixels(poses):
-    out = [HEADER, "#pragma once", "#include <Arduino.h>", "", "namespace gen {", ""]
+def rgb565_hex(c):
+    return f"0x{to_rgb565(*c):04X}"
+
+
+def emit_pixels(poses, pal, bg):
+    out = [HEADER, "#pragma once", "#include <Arduino.h>", ""]
+    out += [f"#define PEDALPETS_PALETTED {1 if pal else 0}", "", "namespace gen {", ""]
+    out += [f"constexpr uint16_t BG_COLOR = {rgb565_hex(bg['color'])};",
+            f"constexpr bool     HAS_SUN  = {'true' if bg['sun'] else 'false'};",
+            f"constexpr uint16_t SUN_COLOR = {rgb565_hex(bg['sun'] or (0, 0, 0))};", ""]
+    if pal:
+        out.append("static const uint16_t PALETTE[16] = {0x0000, "
+                   + ", ".join(rgb565_hex(c) for c in pal) + "};")
+        out.append("")
+        for i, (name, p) in enumerate(poses):
+            data = p["pal4"]
+            out.append(f"static const uint8_t PIX_{i}[{len(data)}] PROGMEM = {{  // {name}")
+            for j in range(0, len(data), 24):
+                out.append("  " + ", ".join(f"0x{v:02X}" for v in data[j:j + 24]) + ",")
+            out += ["};", ""]
+        out.append("static const uint8_t* const POSE_PIXELS[] = {"
+                   + ", ".join(f"PIX_{i}" for i in range(len(poses))) + "};")
+        out += ["", "}  // namespace gen", ""]
+        return "\n".join(out)
     for i, (name, p) in enumerate(poses):
         px = p["pixels"]
         out.append(f"static const uint16_t PIX_{i}[{len(px)}] PROGMEM = {{  // {name}")
@@ -226,24 +327,43 @@ def emit_pixels(poses):
     return "\n".join(out)
 
 
+def background(m):
+    bg = m.get("background", {})
+    return {"color": hex_rgb(bg.get("color", "#000000")),
+            "sun": hex_rgb(bg["sun"]) if "sun" in bg else None}
+
+
 def main():
+    manifest = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else MANIFEST
     try:
-        m = tomllib.loads(MANIFEST.read_text())
+        m = tomllib.loads(manifest.read_text())
         lay = layout(m)
+        pal = palette(m)
+        bg = background(m)
         raw = collect_poses(m)
         index = {name: i for i, name in enumerate(raw)}
         poses = [(name, process_pose(name, p, lay)) for name, p in raw.items()]
-        steps, reactions = build_reactions(m, index)
+        if pal:
+            for name, p in poses:
+                p["pal4"] = pack_pal4(p["rgba"], pal, name)
+        steps, reactions, entries = build_reactions(m, index, with_entries=True)
         if not reactions:
             fail("manifest has no reactions")
         idle_flat, idle_loops = build_idles(m, index)
     except ArtError as e:
         print(f"build_art: {e}", file=sys.stderr)
         sys.exit(1)
+    canvases = []
+    for _, p in poses:
+        c = Image.new("RGBA", (lay["w"], lay["h"]), (0, 0, 0, 0))
+        c.paste(p["rgba"], (p["x"], p["y"]))
+        canvases.append(c)
+    entry_tables = [(name, entry_table(canvases, sp)) for name, sp in entries]
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "pose_meta.h").write_text(emit_meta(lay, poses, steps, reactions, idle_flat, idle_loops))
-    (OUT / "pose_pixels.h").write_text(emit_pixels(poses))
-    total = sum(len(p["pixels"]) * 2 for _, p in poses)
+    (OUT / "pose_meta.h").write_text(emit_meta(lay, poses, steps, reactions, idle_flat, idle_loops,
+                                               entry_tables))
+    (OUT / "pose_pixels.h").write_text(emit_pixels(poses, pal, bg))
+    total = sum(len(p["pal4"]) if pal else len(p["pixels"]) * 2 for _, p in poses)
     print(f"build_art: {len(poses)} poses ({total / 1024:.0f} KB pixels), "
           f"{len(reactions)} reactions, {len(steps)} steps")
 

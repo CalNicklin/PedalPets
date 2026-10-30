@@ -178,11 +178,81 @@ void test_speed_has_hysteresis() {
   for (int i = 1; i < n; i++) TEST_ASSERT_EQUAL_UINT32(60, at[i] - at[i - 1]);
 }
 
-void test_mood_change_waits_for_frame_boundary() {
+void test_mood_change_waits_for_loop_end() {
   run(Mood::IntoIt, 10);
   TEST_ASSERT_EQUAL_UINT16(1, p->pose());  // current pose not finished
   run(Mood::IntoIt, 200);
-  TEST_ASSERT_EQUAL_UINT16(3, p->pose());  // IntoIt cycle starts at pose 0
+  TEST_ASSERT_EQUAL_UINT16(2, p->pose());  // loop carries on to its last pose
+  run(Mood::IntoIt, 210);
+  TEST_ASSERT_EQUAL_UINT16(3, p->pose());  // then hands over to IntoIt's pose 0
+}
+
+// --- reaction loop sections -----------------------------------------------------
+
+// Poses shown, one entry per change, until the reaction ends (or maxMs).
+static int playPoses(uint16_t* out, int max, uint32_t maxMs, uint32_t extendAt = 0,
+                     uint32_t eventAt = 0) {
+  int n = 0;
+  uint32_t t0 = t;
+  out[n++] = p->pose();
+  while (p->playing() && t - t0 < maxMs && n < max) {
+    t += 10;
+    if (extendAt && t - t0 == extendAt) p->extend(t);
+    if (eventAt && t - t0 == eventAt) p->onEvent(EventType::SustainEnd);
+    uint16_t before = p->pose();
+    p->tick(Mood::Curious, 0.0f, t);
+    if (p->playing() && p->pose() != before) out[n++] = p->pose();
+  }
+  return n;
+}
+
+void test_loop_section_plays_once_without_extend() {
+  p->start(FX_LOOP_EXTEND, Trigger::Flurry, t);
+  uint16_t seen[16];
+  int n = playPoses(seen, 16, 2000);
+  uint16_t want[] = {1, 2, 3, 4};
+  TEST_ASSERT_EQUAL_INT(4, n);
+  TEST_ASSERT_EQUAL_UINT16_ARRAY(want, seen, 4);
+}
+
+void test_extend_repeats_loop_section() {
+  p->start(FX_LOOP_EXTEND, Trigger::Flurry, t);
+  uint16_t seen[16];
+  int n = playPoses(seen, 16, 2000, /*extendAt=*/100);
+  uint16_t want[] = {1, 2, 3, 2, 3, 4};
+  TEST_ASSERT_EQUAL_INT(6, n);
+  TEST_ASSERT_EQUAL_UINT16_ARRAY(want, seen, 6);
+}
+
+void test_loop_until_event_then_outro() {
+  p->start(FX_LOOP_UNTIL, Trigger::Sustain, t);
+  uint16_t seen[32];
+  int n = playPoses(seen, 32, 3000, 0, /*eventAt=*/500);
+  // 1 (90) then 2,3 looping every 180 ms; event at 500 ms lets the current pass finish.
+  uint16_t want[] = {1, 2, 3, 2, 3, 2, 3, 4};
+  TEST_ASSERT_EQUAL_INT(8, n);
+  TEST_ASSERT_EQUAL_UINT16_ARRAY(want, seen, 8);
+}
+
+void test_matched_entry_starts_at_closest_step() {
+  p->reset(Mood::IntoIt, t);                 // pose 3
+  p->start(FX_ENTRY, Trigger::Swell, t);
+  TEST_ASSERT_EQUAL_UINT8(0, p->step());     // pose 3 has no better entry
+  run(Mood::IntoIt, 500);
+  p->reset(Mood::IntoIt, t);
+  run(Mood::IntoIt, 90);                     // IntoIt cycle moves on to pose 4
+  TEST_ASSERT_EQUAL_UINT16(4, p->pose());
+  p->start(FX_ENTRY, Trigger::Swell, t);
+  TEST_ASSERT_EQUAL_UINT8(2, p->step());     // joins the reaction at its matching step
+  TEST_ASSERT_EQUAL_UINT16(3, p->pose());
+}
+
+void test_loop_until_caps_at_max() {
+  p->start(FX_LOOP_UNTIL, Trigger::Sustain, t);
+  uint16_t seen[64];
+  int n = playPoses(seen, 64, 5000);   // no event: stops looping after 1000 ms
+  TEST_ASSERT_EQUAL_UINT16(4, seen[n - 1]);
+  TEST_ASSERT_TRUE(n <= 2 + 2 * 6);
 }
 
 void test_reaction_ends_into_new_moods_idle_at_pose_0() {
@@ -211,7 +281,12 @@ int main(int, char**) {
   RUN_TEST(test_idle_holds_are_uniform_whole_frames);
   RUN_TEST(test_energy_speeds_up_in_whole_frames);
   RUN_TEST(test_speed_has_hysteresis);
-  RUN_TEST(test_mood_change_waits_for_frame_boundary);
+  RUN_TEST(test_mood_change_waits_for_loop_end);
+  RUN_TEST(test_loop_section_plays_once_without_extend);
+  RUN_TEST(test_extend_repeats_loop_section);
+  RUN_TEST(test_loop_until_event_then_outro);
+  RUN_TEST(test_loop_until_caps_at_max);
+  RUN_TEST(test_matched_entry_starts_at_closest_step);
   RUN_TEST(test_reaction_ends_into_new_moods_idle_at_pose_0);
   return UNITY_END();
 }

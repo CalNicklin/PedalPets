@@ -20,11 +20,15 @@ void Performer::start(int reaction, Trigger t, uint32_t now) {
   trigger_ = t;
   reactionStart_ = now;
   seen_ = 0;
-  enterStep(0, now);
+  extendPending_ = false;
+  const uint8_t* entry = art_.reactions[reaction].entry;
+  enterStep(entry && pose_ < art_.poseCount ? entry[pose_] : 0, now);
 }
 
 void Performer::extend(uint32_t now) {
-  if (playing()) stepStart_ = now;
+  if (!playing()) return;
+  if (art_.reactions[reaction_].loopLen) extendPending_ = true;
+  else stepStart_ = now;
 }
 
 void Performer::onEvent(EventType e) {
@@ -39,6 +43,12 @@ void Performer::tick(Mood mood, float energy, uint32_t now) {
     if (elapsed < stepHold_) return;
     bool waiting = s.until != EventType::None && !(seen_ & eventBit(s.until));
     if (waiting && elapsed < s.untilMax) return;
+    if (r.loopLen && step_ == r.loopFrom + r.loopLen - 1) {
+      bool again = extendPending_;
+      if (!again && r.loopUntil != EventType::None && !(seen_ & eventBit(r.loopUntil)))
+        again = now - reactionStart_ < r.loopMaxMs;
+      if (again) { extendPending_ = false; enterStep(r.loopFrom, now); return; }
+    }
     if (step_ + 1 < r.stepCount) { enterStep(step_ + 1, now); return; }
     reaction_ = -1;
     trigger_ = Trigger::None;
@@ -50,11 +60,12 @@ void Performer::tick(Mood mood, float energy, uint32_t now) {
 
 // Continuous cycle, each pose held a whole number of frames. Energy speeds
 // the cycle up in whole-frame steps (with hysteresis, so it doesn't flip
-// between two speeds). A mood change waits for the current pose to finish.
+// between two speeds). A mood change waits for the loop to finish, so loops
+// hand over at their shared start/end pose instead of cutting mid-motion.
 void Performer::tickIdle(Mood mood, float energy, uint32_t now) {
   if (now - lastIdleStep_ < idleFrames_ * FRAME_MS) return;
-  if (mood != idleMood_) { startIdle(mood, energy, now); return; }
   const IdleLoop& l = art_.idles[(int)idleMood_];
+  if (mood != idleMood_ && idleIdx_ + 1 >= l.count) { startIdle(mood, energy, now); return; }
   idleIdx_ = (idleIdx_ + 1) % l.count;
   pose_ = art_.idlePoses[l.first + idleIdx_];
   lastIdleStep_ = now;
