@@ -68,6 +68,8 @@ class DollPet {
     choreo.tick(mood.mood(), mood.energy(), now);
     composeDoll(ch.doll, choreo.pose(), parts);
     markCount = placeMarks(ch.choreo, choreo, ch.doll, parts, marks);
+    for (int i = 0; i < markCount; i++)          // keep marks on screen (a popped skull lifts them)
+      if (canvasY() + marks[i].y < 1) marks[i].y = (int16_t)(1 - canvasY());
 
     int fx, fy;                                   // the pet's feet (the ground part's pivot), on screen
     pivotOnCanvas(ch.doll, parts[0], &fx, &fy);
