@@ -49,44 +49,70 @@ def test_invalid_reaction_fields(field, value, msg):
         ba.build_reactions(reaction(**{field: value}), POSES)
 
 
+def idle(poses, period=100):
+    return {"poses": poses, "period": period}
+
+
 def test_idles_require_every_mood():
-    m = {"idles": {"Asleep": ["a"], "Curious": ["a"], "IntoIt": ["b"]}}
+    m = {"idles": {"Asleep": idle(["a"]), "Curious": idle(["a"]), "IntoIt": idle(["b"])}}
     with pytest.raises(ba.ArtError, match="Hyped"):
         ba.build_idles(m, POSES)
 
 
+def test_idles_require_period():
+    m = {"idles": {mood: {"poses": ["a"]} for mood in ba.MOODS}}
+    with pytest.raises(ba.ArtError, match="period"):
+        ba.build_idles(m, POSES)
+
+
 def test_idles_flatten():
-    m = {"idles": {"Asleep": ["a"], "Curious": ["a", "b"], "IntoIt": ["b"], "Hyped": ["a", "b"]}}
+    m = {"idles": {"Asleep": idle(["a"], 900), "Curious": idle(["a", "b"], 125),
+                   "IntoIt": idle(["b"]), "Hyped": idle(["a", "b"], 80)}}
     flat, loops = ba.build_idles(m, POSES)
     assert flat == [0, 0, 1, 1, 0, 1]
-    assert loops == ["{0, 1}", "{1, 2}", "{3, 1}", "{4, 2}"]
+    assert loops == ["{0, 1, 900}", "{1, 2, 125}", "{3, 1, 100}", "{4, 2, 80}"]
+
+
+LAYOUT = ba.layout({"canvas": {"w": 160, "h": 128, "baseline": 122},
+                    "sheets": {"frame": 250, "feet": [136, 167]}})
+
+
+def test_default_layout_is_spec_canvas():
+    d = ba.layout({})
+    assert (d["w"], d["h"], d["baseline"]) == (96, 112, 108)
 
 
 def test_sheet_frame_out_of_range():
     with pytest.raises(ba.ArtError, match="out of range"):
-        ba.load_canvas("sprites/EVil Wizard 2/Sprites/Jump.png#5")
+        ba.load_canvas("sprites/EVil Wizard 2/Sprites/Jump.png#5", LAYOUT)
 
 
 def test_missing_file():
     with pytest.raises(ba.ArtError, match="missing"):
-        ba.load_canvas("art/poses/nope.png")
+        ba.load_canvas("art/poses/nope.png", LAYOUT)
+
+
+def test_png_must_match_canvas():
+    with pytest.raises(ba.ArtError, match="160x128"):
+        ba.load_canvas("sprites/EVil Wizard 2/Sprites/Jump.png", LAYOUT)
 
 
 def test_pose_needs_eyes():
     with pytest.raises(ba.ArtError, match="eyes"):
-        ba.process_pose("x", {"src": f"{IDLE_SHEET}#0"})
+        ba.process_pose("x", {"src": f"{IDLE_SHEET}#0"}, LAYOUT)
 
 
-def test_sheet_pose_is_cropped_onto_baseline():
-    p = ba.process_pose("x", {"src": f"{IDLE_SHEET}#0", "eyes": [52, 30]})
-    assert p["x"] >= 0 and p["x"] + p["w"] <= 96
-    assert p["y"] + p["h"] == 108  # feet on the baseline
+def test_sheet_pose_is_centred_on_baseline():
+    p = ba.process_pose("x", {"src": f"{IDLE_SHEET}#0", "eyes": [52, 30]}, LAYOUT)
+    assert p["x"] > 0 and p["x"] + p["w"] < 160         # not clipped
+    assert abs((p["x"] + p["w"] / 2) - 80) <= 4         # body centred
+    assert p["y"] + p["h"] == 122                        # feet on the baseline
     assert len(p["pixels"]) == p["w"] * p["h"]
     assert (p["ex"], p["ey"]) == (52, 30)
 
 
 def test_baked_eyes():
-    p = ba.process_pose("x", {"src": f"{IDLE_SHEET}#0", "eyes": "baked"})
+    p = ba.process_pose("x", {"src": f"{IDLE_SHEET}#0", "eyes": "baked"}, LAYOUT)
     assert (p["ex"], p["ey"]) == (-1, -1)
 
 

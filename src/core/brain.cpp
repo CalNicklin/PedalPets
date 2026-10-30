@@ -22,17 +22,13 @@ void Brain::onEvent(const MusicEvent& e, uint32_t now) {
     return;
   }
   perf_.onEvent(e.type);
-  if (e.type == EventType::Pick) {
-    perf_.onPick(e.strength, now);
-    return;
-  }
   Trigger t = triggerFor(e.type);
   if (t != Trigger::None) fire(t, now);
 }
 
 void Brain::tick(const Features& f, uint32_t now) {
   if (mood_.tick(f, now) == MoodChange::FellAsleep) fire(Trigger::DriftOff, now);
-  perf_.tick(mood_.mood(), now);
+  perf_.tick(mood_.mood(), mood_.energy(), now);
 }
 
 void Brain::fire(Trigger t, uint32_t now) {

@@ -1,61 +1,84 @@
 # Placeholder art: Evil Wizard sheet frames standing in for the real pet
 # until the Blender pack (sub-project 2). [[sheet_poses]] expands to poses
-# named <prefix>_<frame>. Eye anchors are rough guesses — the overlay only
-# exists to exercise the mechanism.
+# named <prefix>_<frame>. Wizard eyes are part of the sprite, so all poses
+# are "baked" (no overlay).
+
+# The wizard and its spell effects need the whole screen; the real art uses
+# the spec's 96x112 canvas.
+[canvas]
+w        = 160
+h        = 128
+baseline = 122
+
+[sheets]
+frame = 250
+feet  = [136, 167]   # centre of the wizard's feet inside each sheet frame
 
 [[sheet_poses]]
 prefix = "idle"
 src    = "sprites/EVil Wizard 2/Sprites/Idle.png"
-frames = [0, 1, 2, 3, 4, 6]
-eyes   = [52, 30]
+frames = [0, 1, 2, 3, 4, 5, 6, 7]
+eyes   = "baked"
 
 [[sheet_poses]]
 prefix = "run"
 src    = "sprites/EVil Wizard 2/Sprites/Run.png"
-frames = [0, 2, 4, 6]
-eyes   = [52, 36]
+frames = [0, 1, 2, 3, 4, 5, 6, 7]
+eyes   = "baked"
 
 [[sheet_poses]]
 prefix = "attack1"
 src    = "sprites/EVil Wizard 2/Sprites/Attack1.png"
-frames = [0, 3, 6, 7]
-eyes   = [40, 36]
+frames = [7]
+eyes   = "baked"
 
 [[sheet_poses]]
 prefix = "attack2"
 src    = "sprites/EVil Wizard 2/Sprites/Attack2.png"
 frames = [0, 1, 2, 3, 4, 5, 6, 7]
-eyes   = [52, 30]
+eyes   = "baked"
 
 [[sheet_poses]]
 prefix = "hit"
 src    = "sprites/EVil Wizard 2/Sprites/Take hit.png"
 frames = [0, 1, 2]
-eyes   = [52, 30]
+eyes   = "baked"
 
 [[sheet_poses]]
 prefix = "jump"
 src    = "sprites/EVil Wizard 2/Sprites/Jump.png"
 frames = [0, 1]
-eyes   = [48, 34]
+eyes   = "baked"
 
 [[sheet_poses]]
 prefix = "fall"
 src    = "sprites/EVil Wizard 2/Sprites/Fall.png"
 frames = [0, 1]
-eyes   = [52, 30]
+eyes   = "baked"
 
 [[sheet_poses]]
 prefix = "death"
 src    = "sprites/EVil Wizard 2/Sprites/Death.png"
-frames = [2, 4, 5, 6]
+frames = [2, 4, 6]
 eyes   = "baked"
 
-[idles]
-Asleep  = ["death_5", "death_6"]
-Curious = ["idle_0", "idle_2", "idle_4"]
-IntoIt  = ["run_0", "run_2", "run_4", "run_6"]
-Hyped   = ["attack1_0", "attack1_3", "attack1_6"]
+# Idles play as continuous cycles; period is ms per pose at rest and playing
+# harder (mood energy) speeds the cycle up to 1.6x.
+[idles.Asleep]
+poses  = ["death_6"]   # lie still; a two-pose loop reads as twitching
+period = 900
+
+[idles.Curious]
+poses  = ["idle_0", "idle_1", "idle_2", "idle_3", "idle_4", "idle_5", "idle_6", "idle_7"]
+period = 140
+
+[idles.IntoIt]
+poses  = ["run_0", "run_1", "run_2", "run_3", "run_4", "run_5", "run_6", "run_7"]
+period = 110
+
+[idles.Hyped]
+poses  = ["run_0", "run_1", "run_2", "run_3", "run_4", "run_5", "run_6", "run_7"]
+period = 75
 
 [[reactions]]
 id      = "big_hit_a"
@@ -80,14 +103,14 @@ steps = [
 id      = "flurry_a"
 trigger = "Flurry"
 steps = [
-  { pose = "attack2_0", hold = [70, 90] },
-  { pose = "attack2_1", hold = [70, 90] },
-  { pose = "attack2_2", hold = [70, 90] },
-  { pose = "attack2_3", hold = [70, 90] },
-  { pose = "attack2_4", hold = [70, 90] },
-  { pose = "attack2_5", hold = [70, 90] },
-  { pose = "attack2_6", hold = [70, 90] },
-  { pose = "attack2_7", hold = [120, 160] },
+  { pose = "attack2_0", hold = 90 },
+  { pose = "attack2_1", hold = 90 },
+  { pose = "attack2_2", hold = 90 },
+  { pose = "attack2_3", hold = 90 },
+  { pose = "attack2_4", hold = 90 },
+  { pose = "attack2_5", hold = 90 },
+  { pose = "attack2_6", hold = 90 },
+  { pose = "attack2_7", hold = 150 },
 ]
 
 [[reactions]]

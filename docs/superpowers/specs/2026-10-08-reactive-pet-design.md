@@ -131,15 +131,22 @@ ends.
 
 ## Idles
 
-Each mood has an idle loop of 2–3 poses. When the idle starts or resumes
-(after a reaction or a mood change) it begins at pose 0.
+Each mood has an idle **cycle**: a short loop of poses played continuously,
+with a rest period per pose (`[idles.<Mood>] poses, period`).
 
-- Asleep: timer, 900 ms per pose (±20 % jitter).
-- Curious: timer, 700 ms per pose (±20 % jitter).
-- IntoIt / Hyped: **beat-step** — a `Pick` with strength ≥ 0.5, or every
-  2nd pick, advances the idle one pose, at most one step per 250 ms. With no
-  step for 1.5 s it falls back to a timer (IntoIt 500 ms, Hyped 400 ms).
-- Picks do not advance the idle while a reaction is playing.
+- Logic ticks every 10 ms and the screen renders every 3rd tick (30 ms), on a
+  fixed grid. Every pose — idle or reaction step — is held a whole number of
+  frames; uneven 1-frame/2-frame holds read as stutter.
+- Playing harder speeds the cycle up: rate × (1 + 0.6 × energy), applied in
+  whole-frame steps with 0.6-frame hysteresis so it never flickers between
+  two speeds.
+- A mood change waits for the current pose to finish; an idle (re)starts at
+  pose 0 at the current speed.
+- Picks don't step the idle directly (tried: irregular picks made it
+  stutter); they raise energy, which raises the cycle speed.
+
+(Revised 2026-10-30 after simulator measurements: the original "beat-step"
+held 2–3 poses for 0.4–1 s and read as a slideshow.)
 
 ## Reactions
 
@@ -211,7 +218,8 @@ Eye states: `Open, Blink, LookL, LookR, Wide, HappyClosed`.
 
 - Canvas 96×112 per pose, consistent scale, feet on a fixed baseline
   (y = 108), character horizontally centred. Stored cropped (see Generated
-  code).
+  code). The manifest's `[canvas]` table can override this (the placeholder
+  wizard uses the full 160×128 screen for its spell effects).
 - Final palette exactly 4 colours: black, white, red, mid-grey. Stored at
   2 bpp. Eye overlay sprites use the same palette plus a transparent key.
 - Background (off-white + optional red sun disc) is drawn by the renderer,

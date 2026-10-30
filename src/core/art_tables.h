@@ -48,7 +48,8 @@ struct Reaction {
   uint8_t  stepCount;
 };
 
-struct IdleLoop { uint16_t first; uint8_t count; };  // slice of idlePoses
+// Slice of idlePoses played as a continuous cycle; periodMs per pose at rest.
+struct IdleLoop { uint16_t first; uint8_t count; uint16_t periodMs; };
 
 struct ArtTables {
   const PoseMeta* poses;     uint16_t poseCount;

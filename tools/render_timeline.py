@@ -26,21 +26,28 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, str(Path(__file__).parent))
 import build_art as ba  # noqa: E402
 
-SCREEN_W, SCREEN_H = 160, 128
-CANVAS_X = (SCREEN_W - 96) // 2      # mirrors renderer_tft.cpp
-CANVAS_Y = SCREEN_H - 112 - 4
+SCREEN_W, SCREEN_H = ba.SCREEN_W, ba.SCREEN_H
 EYES = ["Auto", "Open", "Blink", "LookL", "LookR", "Wide", "HappyClosed"]
 MOODS = ["Asleep", "Curious", "IntoIt", "Hyped"]
 WHITE = (255, 255, 255)
-SNAP_PX = 6          # pose-to-pose anchor shift that reads as a jump
-FLASH_MS = 70        # a pose shown for less than this reads as a flicker
+SNAP_PX = 6          # pose-to-pose feet shift that reads as a jump
+FEET_ROWS = 12       # bottom rows of a pose used to locate its feet
 
 
 def load_poses():
+    """Pose names and images; each pose's x/y is made screen-relative,
+    mirroring renderer_tft.cpp (canvas centred, bottom-aligned)."""
     m = tomllib.loads(ba.MANIFEST.read_text())
+    lay = ba.layout(m)
+    cx, cy = (SCREEN_W - lay["w"]) // 2, SCREEN_H - lay["h"]
     raw = ba.collect_poses(m)
     names = list(raw)
-    return names, [ba.process_pose(n, raw[n]) for n in names]
+    poses = [ba.process_pose(n, raw[n], lay) for n in names]
+    for p in poses:
+        p["feet"] = feet_x(p)
+        p["sx"], p["sy"] = cx + p["x"], cy + p["y"]
+        p["sex"], p["sey"] = cx + p["ex"], cy + p["ey"]
+    return names, poses
 
 
 def load_rows(path):
@@ -74,15 +81,24 @@ def draw_eyes(d, cx, cy, eye):
 def render(row, poses):
     img = Image.new("RGB", (SCREEN_W, SCREEN_H), (0, 0, 0))
     p = poses[row["pose"]]
-    img.paste(p["image"], (CANVAS_X + p["x"], CANVAS_Y + p["y"]))
+    img.paste(p["image"], (p["sx"], p["sy"]))
     if p["ex"] != -1:
-        draw_eyes(ImageDraw.Draw(img), CANVAS_X + p["ex"], CANVAS_Y + p["ey"], row["eye"])
+        draw_eyes(ImageDraw.Draw(img), p["sex"], p["sey"], row["eye"])
     return img
 
 
+def feet_x(p):
+    """Horizontal centre of the pose's lowest rows (its feet), in canvas coords.
+    Ignores staffs and spell effects that swing the bounding box around."""
+    img = p["image"]
+    strip = img.crop((0, max(0, img.height - FEET_ROWS), img.width, img.height)).convert("L")
+    box = strip.point(lambda v: 255 if v > 8 else 0).getbbox()
+    return p["x"] + ((box[0] + box[2]) / 2 if box else img.width / 2)
+
+
 def anchor(p):
-    """Horizontal centre and bottom of the pose's drawn pixels, in canvas coords."""
-    return p["x"] + p["w"] / 2, p["y"] + p["h"]
+    """Feet centre and bottom of the pose's drawn pixels, in canvas coords."""
+    return p["feet"], p["y"] + p["h"]
 
 
 def pct(values, q):
@@ -117,8 +133,30 @@ def report(rows, names, poses):
     print(f"pose changes: {len(segs) - 1}  ({(len(segs) - 1) / max(dur_s, 1e-9):.1f}/s)")
     if holds:
         print(f"hold ms: p10 {pct(holds, .10)}  median {pct(holds, .5)}  p90 {pct(holds, .90)}")
-    flashes = [(s, names[p], rx) for (s, e, p, rx) in segs[1:-1] if e - s < FLASH_MS]
-    print(f"flickers (< {FLASH_MS} ms): {len(flashes)}")
+
+    # Judder: inside a run of the same animation (same reaction, or idle in the
+    # same mood) the cadence should be steady; a hold that differs from the one
+    # before it by a frame or more reads as a stutter.
+    mood_at = {r["t"]: r["mood"] for r in rows}
+    pairs = judder = 0
+    for (s0, e0, _, rx0), (s1, e1, _, rx1), (s2, _, _, rx2) in zip(segs, segs[1:], segs[2:]):
+        same = rx0 == rx1 == rx2 and (rx1 != "-" or mood_at[s0] == mood_at[s1] == mood_at[s2])
+        if not same:
+            continue
+        pairs += 1
+        judder += abs((e1 - s1) - (e0 - s0)) >= 25
+    print(f"cadence judder: {judder}/{pairs} consecutive holds uneven"
+          f" ({100 * judder / max(pairs, 1):.0f}%)")
+
+    # Glitch: a pose on screen for a single frame at a boundary (reaction or
+    # mood change), i.e. something that flashes up and vanishes.
+    # (An idle pose cut short by a reaction starting is fine: reactions must be instant.)
+    glitches = [(s, names[p]) for (s, e, p, rx), prev, nxt in zip(segs[1:-1], segs, segs[2:])
+                if e - s <= 40 and (prev[3] != rx or nxt[3] != rx)
+                and not (rx == "-" and nxt[3] != "-")]
+    print(f"single-frame glitches at boundaries: {len(glitches)}")
+    for t, n in glitches[:5]:
+        print(f"  {t:>6} ms  {n}")
 
     jumps = []
     for (s0, _, p0, _), (s1, _, p1, rx) in zip(segs, segs[1:]):

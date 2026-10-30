@@ -3,14 +3,12 @@
 #include "core/brain.h"
 #include "core/eyes.h"
 #include "core/performer.h"
+#include "core/timing.h"
 #include "gen/pose_meta.h"
 #include "platform/mock_input.h"
 #include "platform/renderer_tft.h"
 
 namespace {
-constexpr uint32_t TICK_MS  = 10;  // input, mood, performer, eyes at 100 Hz
-constexpr uint32_t FRAME_MS = 33;  // render at ~30 fps
-
 const char* const MOOD_NAMES[] = {"Asleep", "Curious", "IntoIt", "Hyped"};
 
 Rng           rng(1);
@@ -21,7 +19,8 @@ MockInput     mock;
 RendererTft   renderer;
 bool          hud = false;
 bool          telemetry = false;  // one CSV line per frame, for tools/render_timeline.py
-uint32_t      lastTick = 0, lastFrame = 0;
+uint32_t      nextTick = 0;   // fixed grid: logic every TICK_MS, render every 3rd tick
+uint32_t      tickCount = 0;
 
 void resetAll(uint32_t now) {
   mock.reset();
@@ -46,17 +45,18 @@ void loop() {
   if (mock.takeHudToggle()) hud = !hud;
   if (mock.takeTelemetryToggle()) telemetry = !telemetry;
 
-  if (now - lastTick >= TICK_MS) {
-    lastTick = now;
-    mock.tick(now);
-    MusicEvent e;
-    while (mock.pop(now, e)) brain.onEvent(e, now);
-    brain.tick(mock.features(now), now);
-    eyes.tick(brain.mood(), performer.eyes(), now);
-  }
+  if ((int32_t)(now - nextTick) < 0) return;
+  if (now - nextTick > 100) nextTick = now;  // fell far behind (e.g. serial burst): resync
+  uint32_t t = nextTick;                      // logic runs on the grid, not on millis() jitter
+  nextTick += TICK_MS;
 
-  if (now - lastFrame >= FRAME_MS) {
-    lastFrame = now;
+  mock.tick(t);
+  MusicEvent e;
+  while (mock.pop(t, e)) brain.onEvent(e, t);
+  brain.tick(mock.features(t), t);
+  eyes.tick(brain.mood(), performer.eyes(), t);
+
+  if (++tickCount % TICKS_PER_FRAME == 0) {
     HudInfo info = {
       MOOD_NAMES[(int)brain.mood()],
       brain.energy(),

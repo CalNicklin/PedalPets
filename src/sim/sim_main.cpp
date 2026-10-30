@@ -1,5 +1,5 @@
 // Desktop simulator: runs the firmware's brain, performer, eyes and mock input
-// in virtual time with the device loop's cadence (10 ms ticks, 33 ms frames)
+// in virtual time with the device loop's cadence (10 ms ticks, render every 3rd)
 // and writes one CSV row per rendered frame — the same columns as the
 // device's `t` telemetry, so tools/render_timeline.py handles both.
 //
@@ -11,6 +11,7 @@
 #include "core/brain.h"
 #include "core/eyes.h"
 #include "core/performer.h"
+#include "core/timing.h"
 #include "gen/pose_meta.h"
 #include "platform/mock_input.h"
 
@@ -51,20 +52,16 @@ int main(int argc, char** argv) {
   eyes.reset(0);
 
   printf("t_ms,pose,eye,mood,energy,reaction,step,frame_us\n");
-  uint32_t lastTick = 0, lastFrame = 0;
-  for (uint32_t now = 0; now <= duration; now++) {
+  uint32_t tickCount = 0;
+  for (uint32_t now = TICK_MS; now <= duration; now += TICK_MS) {
     for (int i = 0; i < nkeys; i++)
-      if (keys[i].at == now) mock.key(keys[i].key, now);
-    if (now - lastTick >= 10) {
-      lastTick = now;
-      mock.tick(now);
-      MusicEvent e;
-      while (mock.pop(now, e)) brain.onEvent(e, now);
-      brain.tick(mock.features(now), now);
-      eyes.tick(brain.mood(), performer.eyes(), now);
-    }
-    if (now - lastFrame >= 33) {
-      lastFrame = now;
+      if (keys[i].at > now - TICK_MS && keys[i].at <= now) mock.key(keys[i].key, now);
+    mock.tick(now);
+    MusicEvent e;
+    while (mock.pop(now, e)) brain.onEvent(e, now);
+    brain.tick(mock.features(now), now);
+    eyes.tick(brain.mood(), performer.eyes(), now);
+    if (++tickCount % TICKS_PER_FRAME == 0) {
       printf("%u,%u,%d,%d,%.3f,%s,%d,\n", now, performer.pose(), (int)eyes.eye(), (int)brain.mood(),
              brain.energy(), performer.playing() ? gen::REACTION_IDS[performer.reaction()] : "-",
              performer.step());

@@ -2,16 +2,12 @@
 #include <stdint.h>
 #include "art_tables.h"
 #include "rng.h"
+#include "timing.h"
 
 struct PerformerConfig {
   uint32_t interruptGuardMs = 120;
-  uint32_t asleepIdleMs     = 900;   // ±20 % jitter
-  uint32_t curiousIdleMs    = 700;   // ±20 % jitter
-  uint32_t intoItIdleMs     = 500;   // timer fallback period
-  uint32_t hypedIdleMs      = 400;   // timer fallback period
-  uint32_t beatFallbackMs   = 1500;  // no beat-step for this long → timer
-  uint32_t beatMinGapMs     = 250;
-  float    strongPick       = 0.5f;
+  float    idleSpeedup      = 0.6f;  // idle cycle rate × (1 + idleSpeedup × energy)
+  float    speedHysteresis  = 0.6f;  // frames the ideal hold must drift before it changes
 };
 
 // Plays reactions (sequences of key poses) and mood idles. Decides nothing
@@ -34,14 +30,13 @@ class Performer {
   void start(int reaction, Trigger t, uint32_t now);
   void extend(uint32_t now);                  // restart current step's hold
   void onEvent(EventType e);                  // feeds `until`
-  void onPick(float strength, uint32_t now);  // beat-step idle
-  void tick(Mood mood, uint32_t now);
+  void tick(Mood mood, float energy, uint32_t now);
 
  private:
-  void     enterStep(uint8_t i, uint32_t now);
-  void     startIdle(Mood mood, uint32_t now);
-  void     advanceIdle(uint32_t now);
-  uint32_t periodFor(Mood m);
+  void enterStep(uint8_t i, uint32_t now);
+  void startIdle(Mood mood, float energy, uint32_t now);
+  void tickIdle(Mood mood, float energy, uint32_t now);
+  void updateIdleFrames(float energy);
 
   const ArtTables& art_;
   Rng&             rng_;
@@ -60,8 +55,6 @@ class Performer {
 
   Mood     idleMood_     = Mood::Asleep;
   uint8_t  idleIdx_      = 0;
-  uint8_t  picks_        = 0;
+  uint32_t idleFrames_   = 1;   // frames each idle pose is held, at current speed
   uint32_t lastIdleStep_ = 0;
-  uint32_t lastBeat_     = 0;
-  uint32_t idlePeriod_   = 0;
 };

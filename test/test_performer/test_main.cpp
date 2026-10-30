@@ -15,9 +15,11 @@ void setUp() {
 }
 void tearDown() {}
 
-static void run(Mood m, uint32_t ms) {
-  for (uint32_t i = 0; i < ms; i += 10) { t += 10; p->tick(m, t); }
+static void run(Mood m, uint32_t ms, float energy = 0.0f) {
+  for (uint32_t i = 0; i < ms; i += 10) { t += 10; p->tick(m, energy, t); }
 }
+
+
 
 // --- reactions ---------------------------------------------------------------
 
@@ -26,11 +28,11 @@ void test_reaction_plays_steps_then_returns_to_idle() {
   TEST_ASSERT_TRUE(p->playing());
   TEST_ASSERT_EQUAL_UINT16(7, p->pose());
   TEST_ASSERT_EQUAL_INT((int)Eye::Wide, (int)p->eyes());
-  run(Mood::Curious, 80);
+  run(Mood::Curious, 90);
   TEST_ASSERT_EQUAL_UINT16(8, p->pose());
   TEST_ASSERT_EQUAL_INT((int)Eye::Auto, (int)p->eyes());
   TEST_ASSERT_EQUAL_UINT8(1, p->step());
-  run(Mood::Curious, 400);
+  run(Mood::Curious, 390);
   TEST_ASSERT_FALSE(p->playing());
   TEST_ASSERT_EQUAL_UINT16(1, p->pose());  // Curious idle, pose 0
 }
@@ -59,7 +61,7 @@ void test_until_event_before_step_plays_min_hold() {
   p->onEvent(EventType::SustainEnd);  // arrives during step 0
   run(Mood::Curious, 100);
   TEST_ASSERT_EQUAL_UINT16(8, p->pose());
-  run(Mood::Curious, 200);
+  run(Mood::Curious, 210);
   TEST_ASSERT_EQUAL_UINT16(9, p->pose());
 }
 
@@ -78,7 +80,8 @@ void test_random_hold_within_range() {
     p->start(FX_SWELL, Trigger::Swell, t);
     while (p->playing() && t - start < 1000) run(Mood::Curious, 10);
     uint32_t took = t - start;
-    TEST_ASSERT_TRUE_MESSAGE(took >= 100 && took <= 310, "hold outside [100,300]");
+    TEST_ASSERT_TRUE_MESSAGE(took >= 90 && took <= 300, "hold outside [100,300] rounded to frames");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, took % FRAME_MS, "hold is not a whole number of frames");
   }
 }
 
@@ -122,65 +125,68 @@ void test_extend_restarts_current_step_hold() {
   TEST_ASSERT_FALSE(p->playing());
 }
 
-// --- idles -------------------------------------------------------------------
+// --- idles ---------------------------------------------------------------
 
-void test_curious_idle_advances_on_timer() {
+// Times (ms after t0) at which the pose changes while idling.
+static int changeTimes(Mood m, uint32_t ms, float energy, uint32_t* out, int max) {
+  int n = 0;
+  uint32_t t0 = t;
+  for (uint32_t i = 0; i < ms; i += 10) {
+    uint16_t before = p->pose();
+    t += 10;
+    p->tick(m, energy, t);
+    if (p->pose() != before && n < max) out[n++] = t - t0;
+  }
+  return n;
+}
+
+void test_idle_cycles_at_its_period() {
   TEST_ASSERT_EQUAL_UINT16(1, p->pose());
-  run(Mood::Curious, 850);  // 700 ms ± 20 %
+  run(Mood::Curious, 200);
+  TEST_ASSERT_EQUAL_UINT16(1, p->pose());
+  run(Mood::Curious, 10);   // 210 ms period
   TEST_ASSERT_EQUAL_UINT16(2, p->pose());
+  run(Mood::Curious, 210);
+  TEST_ASSERT_EQUAL_UINT16(1, p->pose());  // loops
 }
 
-void test_mood_change_switches_idle_immediately() {
+void test_idle_holds_are_uniform_whole_frames() {
+  p->reset(Mood::IntoIt, t);
+  uint32_t at[32];
+  int n = changeTimes(Mood::IntoIt, 900, 0.0f, at, 32);
+  TEST_ASSERT_EQUAL_INT(10, n);
+  for (int i = 1; i < n; i++) TEST_ASSERT_EQUAL_UINT32(90, at[i] - at[i - 1]);
+}
+
+void test_energy_speeds_up_in_whole_frames() {
+  p->reset(Mood::IntoIt, t);
+  uint32_t at[64];
+  int n = changeTimes(Mood::IntoIt, 1200, 1.0f, at, 64);  // 90 / 1.6 → 2 frames
+  TEST_ASSERT_TRUE(n >= 18);
+  for (int i = 2; i < n; i++) TEST_ASSERT_EQUAL_UINT32(60, at[i] - at[i - 1]);
+}
+
+void test_speed_has_hysteresis() {
+  p->reset(Mood::IntoIt, t);
+  uint32_t at[64];
+  // 3 frames at rest; energy 0.34 → 2.48 frames: too close to switch.
+  int n = changeTimes(Mood::IntoIt, 900, 0.34f, at, 64);
+  for (int i = 2; i < n; i++) TEST_ASSERT_EQUAL_UINT32(90, at[i] - at[i - 1]);
+  // energy 0.6 → 2.17 frames: switch to 2. Then 0.30 → 2.53: stay at 2.
+  changeTimes(Mood::IntoIt, 300, 0.6f, at, 64);
+  n = changeTimes(Mood::IntoIt, 900, 0.30f, at, 64);
+  for (int i = 1; i < n; i++) TEST_ASSERT_EQUAL_UINT32(60, at[i] - at[i - 1]);
+}
+
+void test_mood_change_waits_for_frame_boundary() {
   run(Mood::IntoIt, 10);
-  TEST_ASSERT_EQUAL_UINT16(3, p->pose());
-}
-
-void test_strong_pick_beat_steps_with_min_gap() {
-  p->reset(Mood::IntoIt, t);
-  t += 300; p->onPick(0.9f, t);
-  TEST_ASSERT_EQUAL_UINT16(4, p->pose());
-  t += 100; p->onPick(0.9f, t);
-  TEST_ASSERT_EQUAL_UINT16(4, p->pose());  // < 250 ms since last step
-  t += 200; p->onPick(0.9f, t);
-  TEST_ASSERT_EQUAL_UINT16(3, p->pose());
-}
-
-void test_weak_picks_step_every_second_pick() {
-  p->reset(Mood::IntoIt, t);
-  t += 300; p->onPick(0.2f, t);
-  TEST_ASSERT_EQUAL_UINT16(3, p->pose());
-  t += 300; p->onPick(0.2f, t);
-  TEST_ASSERT_EQUAL_UINT16(4, p->pose());
-}
-
-void test_picks_do_not_step_curious_idle() {
-  t += 300; p->onPick(0.9f, t);
-  TEST_ASSERT_EQUAL_UINT16(1, p->pose());
-}
-
-void test_beat_idle_falls_back_to_timer() {
-  p->reset(Mood::IntoIt, t);
-  run(Mood::IntoIt, 1490);
-  TEST_ASSERT_EQUAL_UINT16(3, p->pose());
-  run(Mood::IntoIt, 20);   // 1.5 s without a step
-  TEST_ASSERT_EQUAL_UINT16(4, p->pose());
-  run(Mood::IntoIt, 500);  // IntoIt timer period
-  TEST_ASSERT_EQUAL_UINT16(3, p->pose());
-}
-
-void test_no_beat_step_during_reaction() {
-  p->reset(Mood::IntoIt, t);
-  p->start(FX_BIGHIT, Trigger::BigHit, t);
-  run(Mood::IntoIt, 300);
-  p->onPick(0.9f, t);
-  TEST_ASSERT_EQUAL_UINT16(8, p->pose());
+  TEST_ASSERT_EQUAL_UINT16(1, p->pose());  // current pose not finished
   run(Mood::IntoIt, 200);
-  TEST_ASSERT_FALSE(p->playing());
-  TEST_ASSERT_EQUAL_UINT16(3, p->pose());
+  TEST_ASSERT_EQUAL_UINT16(3, p->pose());  // IntoIt cycle starts at pose 0
 }
 
 void test_reaction_ends_into_new_moods_idle_at_pose_0() {
-  run(Mood::Curious, 850);
+  run(Mood::Curious, 210);
   TEST_ASSERT_EQUAL_UINT16(2, p->pose());
   p->start(FX_BIGHIT, Trigger::BigHit, t);
   run(Mood::Hyped, 480);   // mood changed mid-reaction
@@ -201,13 +207,11 @@ int main(int, char**) {
   RUN_TEST(test_wake_uninterruptible_driftoff_always_interruptible);
   RUN_TEST(test_idle_can_always_be_interrupted);
   RUN_TEST(test_extend_restarts_current_step_hold);
-  RUN_TEST(test_curious_idle_advances_on_timer);
-  RUN_TEST(test_mood_change_switches_idle_immediately);
-  RUN_TEST(test_strong_pick_beat_steps_with_min_gap);
-  RUN_TEST(test_weak_picks_step_every_second_pick);
-  RUN_TEST(test_picks_do_not_step_curious_idle);
-  RUN_TEST(test_beat_idle_falls_back_to_timer);
-  RUN_TEST(test_no_beat_step_during_reaction);
+  RUN_TEST(test_idle_cycles_at_its_period);
+  RUN_TEST(test_idle_holds_are_uniform_whole_frames);
+  RUN_TEST(test_energy_speeds_up_in_whole_frames);
+  RUN_TEST(test_speed_has_hysteresis);
+  RUN_TEST(test_mood_change_waits_for_frame_boundary);
   RUN_TEST(test_reaction_ends_into_new_moods_idle_at_pose_0);
   return UNITY_END();
 }

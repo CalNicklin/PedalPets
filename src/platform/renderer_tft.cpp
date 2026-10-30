@@ -5,8 +5,8 @@
 namespace {
 constexpr int16_t  SCREEN_W = 160;
 constexpr int16_t  SCREEN_H = 128;
-constexpr int16_t  CANVAS_X = (SCREEN_W - 96) / 2;  // 96x112 pose canvas
-constexpr int16_t  CANVAS_Y = SCREEN_H - 112 - 4;
+constexpr int16_t  CANVAS_X = (SCREEN_W - gen::CANVAS_W) / 2;  // centred, bottom-aligned
+constexpr int16_t  CANVAS_Y = SCREEN_H - gen::CANVAS_H;
 // Black until the real art arrives with its off-white + sun background (sub-project 2).
 constexpr uint16_t BG  = TFT_BLACK;
 constexpr uint16_t EYE = TFT_WHITE;

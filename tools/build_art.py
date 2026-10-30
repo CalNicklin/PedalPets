@@ -11,9 +11,14 @@ Emits:
   src/gen/pose_meta.h    plain C++ (core + tests can include it)
   src/gen/pose_pixels.h  PROGMEM RGB565 pixels (renderer only)
 
-Pose sources are either a 96x112 PNG, or "<sheet.png>#<frame>" to slice a
-placeholder Evil Wizard sheet. Frames are stored cropped to their bounding
-box, with the offset inside the 96x112 canvas.
+Pose sources are either a PNG the size of the canvas, or "<sheet.png>#<frame>"
+to slice a placeholder sprite sheet. Frames are stored cropped to their
+bounding box, with the offset inside the canvas.
+
+Optional manifest tables:
+  [canvas]  w, h, baseline   pose canvas (default 96x112, feet at y=108)
+  [sheets]  frame, feet      sheet frame size and the character's feet
+                             [x, y] inside a frame; slices are centred there
 """
 
 import sys
@@ -26,9 +31,8 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "art" / "manifest.toml"
 OUT = ROOT / "src" / "gen"
 
-CANVAS_W, CANVAS_H = 96, 112
-SHEET_FRAME = 250          # Evil Wizard sheets: 250x250 frames
-SHEET_WINDOW = (80, 59)    # canvas top-left inside a frame; feet land on y=108
+DEFAULT_CANVAS = {"w": 96, "h": 112, "baseline": 108}
+SCREEN_W, SCREEN_H = 160, 128
 
 MOODS = ["Asleep", "Curious", "IntoIt", "Hyped"]
 EYES = ["Auto", "Open", "Blink", "LookL", "LookR", "Wide", "HappyClosed"]
@@ -53,23 +57,36 @@ def to_rgb565(r, g, b):
     return ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3)
 
 
-def load_canvas(src):
-    """Return a 96x112 RGBA image for a pose source."""
+def layout(m):
+    """Canvas size/baseline plus placeholder sheet slicing, from the manifest."""
+    lay = {**DEFAULT_CANVAS, **m.get("canvas", {})}
+    if lay["w"] > SCREEN_W or lay["h"] > SCREEN_H:
+        fail(f"canvas {lay['w']}x{lay['h']} is larger than the {SCREEN_W}x{SCREEN_H} screen")
+    sheets = m.get("sheets", {})
+    lay["frame"] = sheets.get("frame", 250)
+    lay["feet"] = sheets.get("feet", [125, 167])
+    return lay
+
+
+def load_canvas(src, lay):
+    """Return a canvas-sized RGBA image for a pose source."""
+    w, h = lay["w"], lay["h"]
     path, _, frame = src.partition("#")
     if not (ROOT / path).exists():
         fail(f"{src}: file missing")
     img = Image.open(ROOT / path).convert("RGBA")
     if not frame:
-        if img.size != (CANVAS_W, CANVAS_H):
-            fail(f"{src}: must be {CANVAS_W}x{CANVAS_H}, got {img.size[0]}x{img.size[1]}")
+        if img.size != (w, h):
+            fail(f"{src}: must be {w}x{h}, got {img.size[0]}x{img.size[1]}")
         return img
     frame = int(frame)
-    n = img.width // SHEET_FRAME
+    n = img.width // lay["frame"]
     if not 0 <= frame < n:
         fail(f"{src}: frame {frame} out of range (sheet has {n})")
-    x0 = frame * SHEET_FRAME + SHEET_WINDOW[0]
-    y0 = SHEET_WINDOW[1]
-    return img.crop((x0, y0, x0 + CANVAS_W, y0 + CANVAS_H))
+    fx, fy = lay["feet"]
+    x0 = frame * lay["frame"] + fx - w // 2
+    y0 = fy - lay["baseline"]
+    return img.crop((x0, y0, x0 + w, y0 + h))
 
 
 def collect_poses(m):
@@ -85,7 +102,7 @@ def collect_poses(m):
     return poses
 
 
-def process_pose(name, p):
+def process_pose(name, p, lay):
     eyes = p.get("eyes")
     if eyes == "baked":
         ex, ey = -1, -1
@@ -93,7 +110,7 @@ def process_pose(name, p):
         ex, ey = eyes
     else:
         fail(f"pose {name}: needs eyes = [x, y] or \"baked\"")
-    img = load_canvas(p["src"])
+    img = load_canvas(p["src"], lay)
     box = img.getchannel("A").getbbox()
     if not box:
         fail(f"pose {name}: image is empty")
@@ -158,8 +175,12 @@ def build_idles(m, pose_index):
     idles = m.get("idles", {})
     flat, loops = [], []
     for mood in MOODS:
-        names = idles.get(mood) or fail(f"idles.{mood}: needs at least one pose")
-        loops.append(f"{{{len(flat)}, {len(names)}}}")
+        loop = idles.get(mood) or {}
+        names = loop.get("poses") or fail(f"idles.{mood}: needs at least one pose")
+        period = loop.get("period")
+        if not isinstance(period, int) or period <= 0:
+            fail(f"idles.{mood}: needs period = <ms per pose>")
+        loops.append(f"{{{len(flat)}, {len(names)}, {period}}}")
         for n in names:
             if n not in pose_index:
                 fail(f"idles.{mood}: unknown pose {n!r}")
@@ -167,8 +188,9 @@ def build_idles(m, pose_index):
     return flat, loops
 
 
-def emit_meta(poses, steps, reactions, idle_flat, idle_loops):
+def emit_meta(lay, poses, steps, reactions, idle_flat, idle_loops):
     out = [HEADER, "#pragma once", '#include "../core/art_tables.h"', "", "namespace gen {", ""]
+    out += [f"constexpr int CANVAS_W = {lay['w']};", f"constexpr int CANVAS_H = {lay['h']};", ""]
     out.append("static const PoseMeta POSES[] = {")
     for name, p in poses:
         out.append(f"  {{{p['x']}, {p['y']}, {p['w']}, {p['h']}, {p['ex']}, {p['ey']}}},  // {name}")
@@ -207,9 +229,10 @@ def emit_pixels(poses):
 def main():
     try:
         m = tomllib.loads(MANIFEST.read_text())
+        lay = layout(m)
         raw = collect_poses(m)
         index = {name: i for i, name in enumerate(raw)}
-        poses = [(name, process_pose(name, p)) for name, p in raw.items()]
+        poses = [(name, process_pose(name, p, lay)) for name, p in raw.items()]
         steps, reactions = build_reactions(m, index)
         if not reactions:
             fail("manifest has no reactions")
@@ -218,7 +241,7 @@ def main():
         print(f"build_art: {e}", file=sys.stderr)
         sys.exit(1)
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "pose_meta.h").write_text(emit_meta(poses, steps, reactions, idle_flat, idle_loops))
+    (OUT / "pose_meta.h").write_text(emit_meta(lay, poses, steps, reactions, idle_flat, idle_loops))
     (OUT / "pose_pixels.h").write_text(emit_pixels(poses))
     total = sum(len(p["pixels"]) * 2 for _, p in poses)
     print(f"build_art: {len(poses)} poses ({total / 1024:.0f} KB pixels), "

@@ -2,28 +2,29 @@
 #include "core/art_tables.h"
 
 // Poses 0..9; geometry is irrelevant to core logic.
-// Idles: Asleep {0}, Curious {1,2}, IntoIt {3,4}, Hyped {5,6}.
+// Idles: Asleep {0}, Curious {1,2} @210 ms, IntoIt {3,4} @90 ms, Hyped {5,6} @90 ms.
+// Holds are whole 30 ms frames except Swell, which tests quantisation.
 static const PoseMeta FX_POSES[10] = {};
 
 static const Step FX_STEPS[] = {
   // 0-1: BigHit (any mood) — 480 ms total
-  {7,  80,  80, Eye::Wide, EventType::None, 0},
-  {8, 400, 400, Eye::Auto, EventType::None, 0},
+  {7,  90,  90, Eye::Wide, EventType::None, 0},
+  {8, 390, 390, Eye::Auto, EventType::None, 0},
   // 2: BigHit (Hyped only)
-  {9, 100, 100, Eye::Auto, EventType::None, 0},
+  {9,  90,  90, Eye::Auto, EventType::None, 0},
   // 3-5: Sustain — middle step waits for SustainEnd (cap 1000 ms)
-  {7, 100, 100, Eye::Auto, EventType::None, 0},
-  {8, 200, 200, Eye::Auto, EventType::SustainEnd, 1000},
-  {9, 100, 100, Eye::Auto, EventType::None, 0},
+  {7,  90,  90, Eye::Auto, EventType::None, 0},
+  {8, 210, 210, Eye::Auto, EventType::SustainEnd, 1000},
+  {9,  90,  90, Eye::Auto, EventType::None, 0},
   // 6-7: Cut — freezes the current pose first
   {POSE_CURRENT, 300, 300, Eye::Auto, EventType::None, 0},
-  {9, 200, 200, Eye::Auto, EventType::None, 0},
+  {9, 210, 210, Eye::Auto, EventType::None, 0},
   // 8: Flurry
   {7, 300, 300, Eye::Auto, EventType::None, 0},
   // 9: Wake
-  {7, 500, 500, Eye::Wide, EventType::None, 0},
+  {7, 510, 510, Eye::Wide, EventType::None, 0},
   // 10: DriftOff
-  {8, 500, 500, Eye::Auto, EventType::None, 0},
+  {8, 510, 510, Eye::Auto, EventType::None, 0},
   // 11: Swell — random hold
   {7, 100, 300, Eye::Auto, EventType::None, 0},
 };
@@ -48,5 +49,5 @@ static const ArtTables FX_ART = {
   FX_STEPS, sizeof(FX_STEPS) / sizeof(FX_STEPS[0]),
   FX_REACTIONS, sizeof(FX_REACTIONS) / sizeof(FX_REACTIONS[0]),
   FX_IDLE_POSES,
-  {{0, 1}, {1, 2}, {3, 2}, {5, 2}},
+  {{0, 1, 900}, {1, 2, 210}, {3, 2, 90}, {5, 2, 90}},
 };

@@ -4,74 +4,79 @@
 
 namespace gen {
 
+constexpr int CANVAS_W = 160;
+constexpr int CANVAS_H = 128;
+
 static const PoseMeta POSES[] = {
-  {28, 13, 57, 95, 52, 30},  // idle_0
-  {28, 8, 56, 100, 52, 30},  // idle_1
-  {28, 5, 56, 103, 52, 30},  // idle_2
-  {28, 5, 56, 103, 52, 30},  // idle_3
-  {28, 8, 57, 100, 52, 30},  // idle_4
-  {28, 11, 54, 97, 52, 30},  // idle_6
-  {14, 47, 65, 61, 52, 36},  // run_0
-  {12, 43, 67, 65, 52, 36},  // run_2
-  {12, 47, 67, 61, 52, 36},  // run_4
-  {14, 43, 65, 65, 52, 36},  // run_6
-  {0, 48, 52, 60, 40, 36},  // attack1_0
-  {29, 34, 67, 74, 40, 36},  // attack1_3
-  {29, 10, 67, 98, 40, 36},  // attack1_6
-  {29, 10, 67, 98, 40, 36},  // attack1_7
-  {29, 0, 67, 108, 52, 30},  // attack2_0
-  {4, 1, 72, 107, 52, 30},  // attack2_1
-  {1, 0, 75, 108, 52, 30},  // attack2_2
-  {2, 0, 75, 108, 52, 30},  // attack2_3
-  {3, 0, 93, 109, 52, 30},  // attack2_4
-  {8, 0, 88, 109, 52, 30},  // attack2_5
-  {29, 5, 67, 107, 52, 30},  // attack2_6
-  {29, 22, 66, 87, 52, 30},  // attack2_7
-  {26, 21, 45, 87, 52, 30},  // hit_0
-  {28, 22, 34, 86, 52, 30},  // hit_1
-  {28, 28, 35, 80, 52, 30},  // hit_2
-  {11, 27, 69, 81, 48, 34},  // jump_0
-  {2, 28, 78, 80, 48, 34},  // jump_1
-  {27, 22, 65, 86, 52, 30},  // fall_0
-  {27, 15, 64, 93, 52, 30},  // fall_1
-  {28, 13, 66, 95, -1, -1},  // death_2
-  {28, 0, 68, 108, -1, -1},  // death_4
-  {28, 1, 68, 107, -1, -1},  // death_5
-  {28, 95, 68, 13, -1, -1},  // death_6
+  {52, 27, 57, 95, -1, -1},  // idle_0
+  {52, 22, 56, 100, -1, -1},  // idle_1
+  {52, 19, 56, 103, -1, -1},  // idle_2
+  {52, 19, 56, 103, -1, -1},  // idle_3
+  {52, 22, 57, 100, -1, -1},  // idle_4
+  {52, 18, 55, 104, -1, -1},  // idle_5
+  {52, 25, 54, 97, -1, -1},  // idle_6
+  {52, 25, 56, 97, -1, -1},  // idle_7
+  {38, 61, 65, 61, -1, -1},  // run_0
+  {36, 60, 67, 62, -1, -1},  // run_1
+  {36, 57, 67, 65, -1, -1},  // run_2
+  {33, 54, 70, 68, -1, -1},  // run_3
+  {36, 61, 67, 61, -1, -1},  // run_4
+  {37, 55, 66, 67, -1, -1},  // run_5
+  {38, 57, 65, 65, -1, -1},  // run_6
+  {40, 55, 63, 64, -1, -1},  // run_7
+  {53, 2, 79, 120, -1, -1},  // attack1_7
+  {53, 13, 72, 109, -1, -1},  // attack2_0
+  {28, 15, 72, 107, -1, -1},  // attack2_1
+  {25, 8, 75, 114, -1, -1},  // attack2_2
+  {26, 0, 75, 122, -1, -1},  // attack2_3
+  {27, 0, 133, 123, -1, -1},  // attack2_4
+  {32, 0, 128, 128, -1, -1},  // attack2_5
+  {36, 0, 124, 128, -1, -1},  // attack2_6
+  {53, 36, 66, 87, -1, -1},  // attack2_7
+  {50, 35, 45, 87, -1, -1},  // hit_0
+  {52, 36, 34, 86, -1, -1},  // hit_1
+  {52, 42, 35, 80, -1, -1},  // hit_2
+  {35, 41, 69, 81, -1, -1},  // jump_0
+  {26, 42, 78, 80, -1, -1},  // jump_1
+  {51, 36, 65, 86, -1, -1},  // fall_0
+  {51, 29, 64, 93, -1, -1},  // fall_1
+  {52, 27, 66, 95, -1, -1},  // death_2
+  {52, 12, 105, 110, -1, -1},  // death_4
+  {52, 109, 105, 13, -1, -1},  // death_6
 };
 
 static const Step STEPS[] = {
-  {22, 80, 80, Eye::Wide, EventType::None, 5000},
-  {23, 350, 500, Eye::Wide, EventType::None, 5000},
-  {24, 250, 250, Eye::Auto, EventType::None, 5000},
-  {27, 80, 80, Eye::Wide, EventType::None, 5000},
-  {28, 400, 600, Eye::Wide, EventType::None, 5000},
-  {13, 250, 250, Eye::Auto, EventType::None, 5000},
-  {14, 70, 90, Eye::Auto, EventType::None, 5000},
-  {15, 70, 90, Eye::Auto, EventType::None, 5000},
-  {16, 70, 90, Eye::Auto, EventType::None, 5000},
-  {17, 70, 90, Eye::Auto, EventType::None, 5000},
-  {18, 70, 90, Eye::Auto, EventType::None, 5000},
-  {19, 70, 90, Eye::Auto, EventType::None, 5000},
-  {20, 70, 90, Eye::Auto, EventType::None, 5000},
-  {21, 120, 160, Eye::Auto, EventType::None, 5000},
-  {5, 200, 200, Eye::Auto, EventType::None, 5000},
-  {25, 300, 300, Eye::Auto, EventType::SwellPeak, 5000},
-  {26, 400, 400, Eye::Wide, EventType::None, 5000},
-  {28, 200, 200, Eye::Auto, EventType::None, 5000},
+  {25, 80, 80, Eye::Wide, EventType::None, 5000},
+  {26, 350, 500, Eye::Wide, EventType::None, 5000},
+  {27, 250, 250, Eye::Auto, EventType::None, 5000},
+  {30, 80, 80, Eye::Wide, EventType::None, 5000},
+  {31, 400, 600, Eye::Wide, EventType::None, 5000},
+  {16, 250, 250, Eye::Auto, EventType::None, 5000},
+  {17, 90, 90, Eye::Auto, EventType::None, 5000},
+  {18, 90, 90, Eye::Auto, EventType::None, 5000},
+  {19, 90, 90, Eye::Auto, EventType::None, 5000},
+  {20, 90, 90, Eye::Auto, EventType::None, 5000},
+  {21, 90, 90, Eye::Auto, EventType::None, 5000},
+  {22, 90, 90, Eye::Auto, EventType::None, 5000},
+  {23, 90, 90, Eye::Auto, EventType::None, 5000},
+  {24, 150, 150, Eye::Auto, EventType::None, 5000},
+  {6, 200, 200, Eye::Auto, EventType::None, 5000},
+  {28, 300, 300, Eye::Auto, EventType::SwellPeak, 5000},
+  {29, 400, 400, Eye::Wide, EventType::None, 5000},
+  {31, 200, 200, Eye::Auto, EventType::None, 5000},
   {1, 200, 200, Eye::Wide, EventType::None, 5000},
-  {25, 400, 400, Eye::Wide, EventType::SustainEnd, 6000},
+  {28, 400, 400, Eye::Wide, EventType::SustainEnd, 6000},
   {0, 300, 300, Eye::HappyClosed, EventType::None, 5000},
   {POSE_CURRENT, 600, 600, Eye::Auto, EventType::None, 5000},
-  {13, 700, 700, Eye::Wide, EventType::None, 5000},
-  {22, 120, 120, Eye::Wide, EventType::None, 5000},
+  {16, 700, 700, Eye::Wide, EventType::None, 5000},
+  {25, 120, 120, Eye::Wide, EventType::None, 5000},
   {0, 400, 400, Eye::LookL, EventType::None, 5000},
   {0, 400, 400, Eye::LookR, EventType::None, 5000},
   {0, 300, 300, Eye::Auto, EventType::None, 5000},
   {3, 600, 600, Eye::HappyClosed, EventType::None, 5000},
-  {29, 400, 400, Eye::Auto, EventType::None, 5000},
-  {30, 400, 400, Eye::Auto, EventType::None, 5000},
-  {32, 500, 500, Eye::Auto, EventType::None, 5000},
+  {32, 400, 400, Eye::Auto, EventType::None, 5000},
+  {33, 400, 400, Eye::Auto, EventType::None, 5000},
+  {34, 500, 500, Eye::Auto, EventType::None, 5000},
 };
 
 static const Reaction REACTIONS[] = {
@@ -86,14 +91,14 @@ static const Reaction REACTIONS[] = {
 };
 
 static const char* const REACTION_IDS[] = {"big_hit_a", "big_hit_b", "flurry_a", "swell_a", "sustain_a", "cut_a", "wake_a", "drift_off_a"};
-static const uint16_t IDLE_POSES[] = {31, 32, 0, 2, 4, 6, 7, 8, 9, 10, 11, 12};
+static const uint16_t IDLE_POSES[] = {34, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 8, 9, 10, 11, 12, 13, 14, 15};
 
 static const ArtTables ART = {
-  POSES, 33,
+  POSES, 35,
   STEPS, 31,
   REACTIONS, 8,
   IDLE_POSES,
-  {{0, 2}, {2, 3}, {5, 4}, {9, 3}},
+  {{0, 1, 900}, {1, 8, 140}, {9, 8, 110}, {17, 8, 75}},
 };
 
 }  // namespace gen
