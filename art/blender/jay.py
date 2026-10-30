@@ -123,16 +123,16 @@ action("groove", 24, [
 ], loop=True, idle="IntoIt")
 
 def hyped_keys():
-    """Peak state: wings beat every 4 frames (~8 Hz), two big hops per loop,
-    body rocks forward/back with the head banging against it. Keys every 2
-    frames (alternate wing extremes); the spline fills the frames between."""
+    """Peak state: a full wing beat every 8 frames (240 ms, ~4 Hz; faster
+    smears into a blur on the LCD), two big hops per loop, body rocking
+    forward/back with the head banging against it."""
     import math
     keys = []
-    for k in range(0, 25, 2):
-        hop = math.sin(math.pi * (k % 12) / 12)          # 0 on the ground, 1 at the top
-        land = 1 - hop                                    # squash on landing
-        rock = math.sin(2 * math.pi * k / 24)
-        wing = 165 if (k // 2) % 2 else 25
+    for k in range(0, 33, 2):
+        hop = math.sin(math.pi * (k % 16) / 16)           # 0 on the ground, 1 at the top
+        land = 1 - hop                                     # squash on landing
+        rock = math.sin(2 * math.pi * k / 32)
+        wing = 95 - 70 * math.cos(2 * math.pi * k / 8)     # 25 (down) .. 165 (high V)
         pose = merge(HUB, P(
             hips={"r": (14 * rock, 0, 0)},
             root={"l": (0, 0, 0.3 * hop), "s": (1 + 0.09 * land, 1, 1 - 0.13 * land)},
@@ -140,11 +140,11 @@ def hyped_keys():
             tail={"r": (-10 * rock, 0, 0)}),
             wings(wing), crest(-40), beak(24 + 8 * hop))
         keys.append((k, pose))
-    keys[-1] = (24, keys[0][1])                           # seamless loop
+    keys[-1] = (32, keys[0][1])                            # seamless loop
     return keys
 
 
-action("hyped", 24, hyped_keys(), loop=True, idle="Hyped")
+action("hyped", 32, hyped_keys(), loop=True, idle="Hyped")
 
 action("asleep", 48, [
     (0, ASLEEP),
@@ -169,9 +169,9 @@ FLAP_UP = merge(HUB, P(root={"l": (0, 0, 0.06), "s": (0.97, 1, 1.03)}, tail={"r"
                 wings(160), crest(-30), beak(14))
 FLAP_DOWN = merge(HUB, P(root={"l": (0, 0, 0.0), "s": (1.05, 1, 0.94)}, tail={"r": (-5, 0, 0)}),
                   wings(40), crest(-24), beak(20))
-action("flurry", 22, [
-    (0, HUB), (3, FLAP_UP), (6, FLAP_DOWN), (9, FLAP_UP), (12, FLAP_DOWN), (15, FLAP_UP), (21, HUB),
-], trigger="Flurry", loop_from=3, loop_len=12, entry_window=9)
+action("flurry", 27, [
+    (0, HUB), (4, FLAP_UP), (8, FLAP_DOWN), (12, FLAP_UP), (16, FLAP_DOWN), (20, FLAP_UP), (26, HUB),
+], trigger="Flurry", loop_from=4, loop_len=16, entry_window=13)
 
 SING = merge(HUB, P(neck={"l": (0, 0.02, 0.06)}, head={"r": (-24, 0, 0)}, root={"s": (0.97, 1, 1.04)}),
              wings(28), crest(-36), beak(34), eyes(0.5))

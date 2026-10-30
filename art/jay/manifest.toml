@@ -455,6 +455,38 @@ eyes = "baked"
 src  = "art/jay/poses/hyped_23.png"
 eyes = "baked"
 
+[poses.hyped_24]
+src  = "art/jay/poses/hyped_24.png"
+eyes = "baked"
+
+[poses.hyped_25]
+src  = "art/jay/poses/hyped_25.png"
+eyes = "baked"
+
+[poses.hyped_26]
+src  = "art/jay/poses/hyped_26.png"
+eyes = "baked"
+
+[poses.hyped_27]
+src  = "art/jay/poses/hyped_27.png"
+eyes = "baked"
+
+[poses.hyped_28]
+src  = "art/jay/poses/hyped_28.png"
+eyes = "baked"
+
+[poses.hyped_29]
+src  = "art/jay/poses/hyped_29.png"
+eyes = "baked"
+
+[poses.hyped_30]
+src  = "art/jay/poses/hyped_30.png"
+eyes = "baked"
+
+[poses.hyped_31]
+src  = "art/jay/poses/hyped_31.png"
+eyes = "baked"
+
 [poses.asleep_00]
 src  = "art/jay/poses/asleep_00.png"
 eyes = "baked"
@@ -857,6 +889,26 @@ eyes = "baked"
 
 [poses.flurry_21]
 src  = "art/jay/poses/flurry_21.png"
+eyes = "baked"
+
+[poses.flurry_22]
+src  = "art/jay/poses/flurry_22.png"
+eyes = "baked"
+
+[poses.flurry_23]
+src  = "art/jay/poses/flurry_23.png"
+eyes = "baked"
+
+[poses.flurry_24]
+src  = "art/jay/poses/flurry_24.png"
+eyes = "baked"
+
+[poses.flurry_25]
+src  = "art/jay/poses/flurry_25.png"
+eyes = "baked"
+
+[poses.flurry_26]
+src  = "art/jay/poses/flurry_26.png"
 eyes = "baked"
 
 [poses.sustain_00]
@@ -1512,7 +1564,7 @@ poses  = ["groove_00", "groove_01", "groove_02", "groove_03", "groove_04", "groo
 period = 30
 
 [idles.Hyped]
-poses  = ["hyped_00", "hyped_01", "hyped_02", "hyped_03", "hyped_04", "hyped_05", "hyped_06", "hyped_07", "hyped_08", "hyped_09", "hyped_10", "hyped_11", "hyped_12", "hyped_13", "hyped_14", "hyped_15", "hyped_16", "hyped_17", "hyped_18", "hyped_19", "hyped_20", "hyped_21", "hyped_22", "hyped_23"]
+poses  = ["hyped_00", "hyped_01", "hyped_02", "hyped_03", "hyped_04", "hyped_05", "hyped_06", "hyped_07", "hyped_08", "hyped_09", "hyped_10", "hyped_11", "hyped_12", "hyped_13", "hyped_14", "hyped_15", "hyped_16", "hyped_17", "hyped_18", "hyped_19", "hyped_20", "hyped_21", "hyped_22", "hyped_23", "hyped_24", "hyped_25", "hyped_26", "hyped_27", "hyped_28", "hyped_29", "hyped_30", "hyped_31"]
 period = 30
 
 [idles.Asleep]
@@ -1560,9 +1612,9 @@ steps = [
 [[reactions]]
 id      = "flurry"
 trigger = "Flurry"
-loop_from = 3
-loop_len  = 12
-entry_window = 9
+loop_from = 4
+loop_len  = 16
+entry_window = 13
 steps = [
   { pose = "flurry_00", hold = 30 },
   { pose = "flurry_01", hold = 30 },
@@ -1586,6 +1638,11 @@ steps = [
   { pose = "flurry_19", hold = 30 },
   { pose = "flurry_20", hold = 30 },
   { pose = "flurry_21", hold = 30 },
+  { pose = "flurry_22", hold = 30 },
+  { pose = "flurry_23", hold = 30 },
+  { pose = "flurry_24", hold = 30 },
+  { pose = "flurry_25", hold = 30 },
+  { pose = "flurry_26", hold = 30 },
 ]
 
 [[reactions]]
