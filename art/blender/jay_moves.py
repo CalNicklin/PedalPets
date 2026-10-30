@@ -70,6 +70,12 @@ move("strut", 16, stride=[(0, 0), (4, 1), (12, -1), (16, 0)], x=[(0, 0), (16, 8)
      pitch=[(0, 0), (4, 12), (8, 0), (12, 12), (16, 0)], lean=[(0, 0), (4, -6), (12, -6), (16, 0)],
      squash=[(0, 0), (4, 0.5), (8, 0), (12, 0.5), (16, 0)], look=[(0, 0), (6, 10), (12, 10), (16, 0)])
 
+# Hop on the beat: a little bounce in place with a wing flick.
+move("hop_beat", 16, hop=[(0, 0), (2, 0), (6, 6), (10, 0), (16, 0)],
+     legs=[(0, 0), (2, 0.75), (4, -1), (9, -1), (10, 0.6), (16, 0)],
+     squash=[(0, 0), (2, 0.75), (5, -0.75), (10, 0.6), (16, 0)], **both([(0, 0), (5, 50), (11, 0)]),
+     pitch=[(0, 0), (6, -6), (11, 8), (16, 0)], tail=[(0, 0), (6, 10), (16, 0)])
+
 move("turn_round", 20, flip_at=8, hop=[(0, 0), (3, 0), (8, 6), (13, 0), (20, 0)],
      legs=[(0, 0), (2, 0.75), (6, -1), (10, -1), (13, 0.6), (20, 0)],
      squash=[(0, 0), (2, 0.75), (8, -0.5), (13, 0.6), (20, 0)], **both([(0, 0), (7, 40), (13, 0)]))
@@ -104,11 +110,12 @@ move("wing_flick", 12, **both([(0, 0), (4, 45), (12, 0)]), pitch=[(0, 0), (4, 8)
 
 # --- hyped: beat moves (wing beats every 8 frames; faster blurs on the LCD) -----
 # Landings hold the squash a few frames and ease out; an instant rebound reads as a jolt.
-move("hop_flap", 22, hop=[(0, 0), (2, 0), (8, 14), (14, 0), (22, 0)],
-     legs=[(0, 0), (2, 1), (5, -1), (11, -1), (14, 0.9), (17, 0.8), (22, 0)],
-     squash=[(0, 0), (2, 1), (8, -1), (14, 1), (17, 0.8), (22, 0)],
-     **both([(0, 0), (4, 150), (8, 30), (12, 150), (18, 0)]),
-     jaw=[(0, 0), (8, 24), (18, 0)], pitch=[(0, 0), (8, -10), (14, 8), (22, 0)])
+move("hop_flap", 28, hop=[(0, 0), (2, 0), (8, 18), (12, 21), (16, 18), (22, 0), (28, 0)],
+     legs=[(0, 0), (2, 1.25), (5, -1), (19, -1), (22, 1), (25, 0.8), (28, 0)],
+     squash=[(0, 0), (2, 1.25), (7, -1), (22, 1), (25, 0.8), (28, 0)],
+     **both([(0, 0), (4, 155), (8, 25), (12, 158), (16, 25), (20, 150), (26, 0)]),
+     jaw=[(0, 0), (6, 26), (22, 0)], pitch=[(0, 0), (8, -18), (16, -10), (22, 8), (28, 0)],
+     crest=[(0, 0), (6, -34), (22, 0)])
 move("headbang", 12, pitch=[(0, 0), (4, 30), (8, -12), (12, 0)], lean=[(0, 0), (4, 10), (12, 0)],
      jaw=[(0, 0), (4, 20), (12, 0)], squash=[(0, 0), (4, 1), (12, 0)], tail=[(0, 0), (5, -14), (12, 0)])
 move("flap_burst", 16, **both([(0, 0), (4, 155), (8, 25), (12, 155), (16, 0)]),
@@ -121,14 +128,39 @@ move("turn_hop", 22, flip_at=8, hop=[(0, 0), (2, 0), (8, 12), (14, 0), (22, 0)],
      legs=[(0, 0), (2, 1), (5, -1), (11, -1), (14, 0.9), (17, 0.8), (22, 0)],
      squash=[(0, 0), (2, 1), (8, -1), (14, 1), (17, 0.8), (22, 0)],
      **both([(0, 0), (4, 150), (8, 30), (12, 150), (18, 0)]))
-# The peak: six unbroken wing beats, feet planted, crest up, beak open.
-move("flap_frenzy", 52, **both([(0, 0), (4, 155), (8, 25), (12, 158), (16, 25), (20, 160), (24, 25), (28, 160),
-                                  (32, 25), (36, 158), (40, 25), (44, 155), (52, 0)]),
-     hop=[(0, 0), (4, 3), (8, 0), (12, 4), (16, 0), (20, 5), (24, 1), (28, 5), (32, 1), (36, 4), (40, 0), (44, 3), (52, 0)],
-     legs=[(0, 0), (4, 0.5), (48, 0.5), (52, 0)], squash=[(0, 0), (4, -0.5), (48, -0.5), (52, 0)],
-     lean=[(0, 0), (6, -6), (46, -6), (52, 0)], pitch=[(0, 0), (6, -16), (46, -16), (52, 0)],
-     crest=[(0, 0), (4, -40), (48, -40), (52, 0)], jaw=[(0, 0), (4, 26), (48, 26), (52, 0)],
-     tail=[(0, 0), (8, -10), (16, 6), (24, -10), (32, 6), (40, -10), (52, 0)])
+# The peak: crouch, burst up, hover flapping like mad (each downstroke lifts
+# him, he sags between), wobbling about, then drop and land.
+def flight(frames, takeoff, land, base, strokes_every=8):
+    wings, hop, lean = [(0, 0), (takeoff - 2, 20)], [(0, 0), (takeoff, 0)], [(0, 0), (takeoff, 8)]
+    f, up, i = takeoff, True, 0
+    while f < land - 10:
+        wings.append((f, 160 if up else 20))
+        hop.append((f, base + (6 if not up else 0) + (3 if i % 4 == 1 else 0)))
+        lean.append((f, (-10, 6, -4, 10)[i % 4]))
+        f += strokes_every // 2; up = not up; i += 1
+    # glide down: wings out, sinking over ~10 frames
+    wings += [(land - 6, 90), (land, 120), (frames, 0)]
+    hop += [(land - 5, base * 0.5), (land, 0), (frames, 0)]
+    lean += [(land, 0), (frames, 0)]
+    return wings, hop, lean
+
+
+_w, _h, _l = flight(72, 6, 62, 18)
+move("frenzy_flight", 72, **both(_w), hop=_h, lean=_l,
+     legs=[(0, 0), (4, 1.5), (6, 1.5), (9, -1), (56, -1), (60, 0), (63, 1), (67, 0.8), (72, 0)],
+     squash=[(0, 0), (4, 1.5), (7, -1), (12, -0.5), (58, -0.5), (63, 1.5), (67, 0.8), (72, 0)],
+     pitch=[(0, 0), (6, -20), (20, -28), (32, 10), (44, -28), (58, -10), (72, 0)],
+     crest=[(0, 0), (6, -40), (62, -40), (72, 0)], jaw=[(0, 0), (6, 30), (62, 30), (72, 0)],
+     eyes=[(0, 0), (6, -1), (58, -1), (64, 0)],
+     tail=[(0, 0), (10, -14), (18, 10), (26, -14), (34, 10), (42, -14), (50, 10), (72, 0)])
+# Pogo: three quick flapping jumps in a row, head thrown back.
+move("pogo", 36, hop=[(0, 0), (2, 0), (6, 13), (10, 0), (12, 0), (16, 15), (20, 0), (22, 0), (26, 13), (30, 0), (36, 0)],
+     legs=[(0, 0), (2, 1), (4, -1), (9, -1), (10, 1), (12, 1), (14, -1), (19, -1), (20, 1), (22, 1), (24, -1),
+           (29, -1), (30, 1), (33, 0.6), (36, 0)],
+     squash=[(0, 0), (2, 1), (5, -1), (10, 1), (12, 1), (15, -1), (20, 1), (22, 1), (25, -1), (30, 1), (33, 0.6), (36, 0)],
+     **both([(0, 0), (3, 20), (6, 160), (10, 30), (13, 20), (16, 160), (20, 30), (23, 20), (26, 160), (30, 30), (36, 0)]),
+     pitch=[(0, 0), (6, -24), (10, 10), (16, -24), (20, 10), (26, -24), (30, 10), (36, 0)],
+     jaw=[(0, 0), (6, 28), (30, 28), (36, 0)], crest=[(0, 0), (6, -36), (30, -36), (36, 0)])
 move("rock", 24, lean=[(0, 0), (6, 14), (18, -12), (24, 0)], tail=[(0, 0), (6, -12), (18, 10), (24, 0)],
      pitch=[(0, 0), (6, -8), (18, 8), (24, 0)], **both([(0, 0), (6, 30), (12, 0), (18, 30), (24, 0)]))
 
@@ -178,15 +210,13 @@ VOCAB = {
     "Asleep":  [("breathe", 6, "idle"), ("twitch", 1, "idle")],
     "Curious": [("look_l", 3, "idle"), ("look_r", 3, "idle"), ("tilt", 2, "idle"), ("blink", 4, "idle"),
                 ("double_blink", 1, "idle"), ("crest_flick", 2, "idle"), ("preen", 1, "idle"),
-                ("tail_flick", 2, "idle"), ("hop_small", 1, "idle"), ("hop_fwd", 1, "idle"),
-                ("walk", 5, "idle"), ("walk_long", 2, "idle"), ("turn_round", 3, "idle"), ("shuffle", 1, "idle"),
-                ("peck", 2, "idle"), ("look_you", 2, "idle"), ("shake", 1, "idle")],
+                ("tail_flick", 2, "idle"), ("hop_small", 3, "idle"), ("hop_fwd", 4, "idle"), ("hop_fwd2", 3, "idle"),
+                ("turn_round", 3, "idle"), ("peck", 2, "idle"), ("look_you", 2, "idle"), ("shake", 1, "idle")],
     "IntoIt":  [("nod", 4, "beat"), ("bob", 3, "beat"), ("side_nod", 2, "beat"), ("tail_pump", 2, "beat"),
-                ("wing_flick", 1, "beat"), ("shuffle", 1, "beat"), ("strut", 3, "beat"), ("blink", 3, "idle"), ("crest_flick", 1, "idle"),
-                ("look_you", 1, "idle"), ("shake", 1, "idle"), ("turn_round", 1, "idle")],
-    "Hyped":   [("flap_frenzy", 6, "beat"), ("hop_flap", 4, "beat"), ("flap_burst", 3, "beat"), ("headbang", 2, "beat"),
-                ("rock", 1, "beat"), ("hop_travel", 1, "beat"), ("turn_hop", 1, "beat"), ("blink", 2, "idle"),
-                ("crest_flick", 1, "idle")],
+                ("wing_flick", 2, "beat"), ("hop_beat", 3, "beat"), ("hop_fwd", 2, "beat"), ("blink", 3, "idle"),
+                ("crest_flick", 1, "idle"), ("look_you", 1, "idle"), ("shake", 1, "idle"), ("turn_round", 1, "idle")],
+    "Hyped":   [("frenzy_flight", 6, "beat"), ("pogo", 4, "beat"), ("hop_flap", 4, "beat"), ("flap_burst", 1, "beat"),
+                ("headbang", 1, "beat"), ("hop_travel", 1, "beat"), ("turn_hop", 1, "beat"), ("blink", 1, "idle")],
 }
 IDLE_GAPS = {"Asleep": (1800, 4500), "Curious": (500, 1600), "IntoIt": (1200, 3000), "Hyped": (1200, 3000)}
 BEAT_MS = {"Asleep": 0, "Curious": 0, "IntoIt": 560, "Hyped": 480}

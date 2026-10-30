@@ -45,6 +45,9 @@ void MockInput::runScript(int n, uint32_t now) {
 
 void MockInput::tick(uint32_t now) {
   if (!script_) return;
+  // Keys arrive on millis() but ticks run on the (slightly earlier) grid; an
+  // unsigned now - scriptStart_ would wrap and fire the whole script at once.
+  if ((int32_t)(now - scriptStart_) < 0) return;
   bool done = true;
   for (int i = 0; i < script_->count; i++) {
     const ScriptEntry& e = script_->entries[i];
