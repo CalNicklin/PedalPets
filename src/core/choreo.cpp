@@ -2,19 +2,19 @@
 #include <math.h>
 
 Choreographer::Choreographer(const Choreography& c, Rng& rng, const ChoreoConfig& cfg)
-    : c_(c), rng_(rng), cfg_(cfg) {
+    : c_(&c), rng_(rng), cfg_(cfg) {
   for (int i = 0; i < TRIGGER_COUNT; i++) lastVariant_[i] = -1;
 }
 
 void Choreographer::reset(Mood mood, uint32_t now) {
   for (Slot& s : slots_) s = Slot();
   for (LiveMark& m : marks_) m = LiveMark();
-  const MoodStyle& st = c_.moods[(int)mood];
-  for (int ch = 0; ch < c_.channelCount; ch++) pose_.ch[ch] = stance_[ch] = st.stance[ch] / 4.0f;
+  const MoodStyle& st = c_->moods[(int)mood];
+  for (int ch = 0; ch < c_->channelCount; ch++) pose_.ch[ch] = stance_[ch] = st.stance[ch] / 4.0f;
   stageX_ = 0;
   facing_ = 1;
-  if (c_.xChannel >= 0) pose_.ch[c_.xChannel] = stageX_;
-  if (c_.faceChannel >= 0) pose_.ch[c_.faceChannel] = facing_;
+  if (c_->xChannel >= 0) pose_.ch[c_->xChannel] = stageX_;
+  if (c_->faceChannel >= 0) pose_.ch[c_->faceChannel] = facing_;
   reactionTrigger_ = Trigger::None;
   intent_ = Intent::None;
   gazeWeight_ = 0;
@@ -56,8 +56,8 @@ MarkFrame Choreographer::markFrame(int i) const {
   for (const LiveMark& m : marks_) {
     if (m.mark < 0) continue;
     if (i-- > 0) continue;
-    MarkFrame f = c_.markFrames[c_.marks[m.mark].firstFrame + m.frame];
-    if (m.facing < 0) f.dx = (int8_t)(-f.dx - c_.markSizes[f.image].w);   // mirror the offset, not the drawing
+    MarkFrame f = c_->markFrames[c_->marks[m.mark].firstFrame + m.frame];
+    if (m.facing < 0) f.dx = (int8_t)(-f.dx - c_->markSizes[f.image].w);   // mirror the offset, not the drawing
     return f;
   }
   return {0, 0, 0};
@@ -87,20 +87,20 @@ float Choreographer::weightOf(int move) const {
 }
 
 float Choreographer::sample(const Slot& s, int channel) const {
-  const Move& m = c_.moves[s.move];
+  const Move& m = c_->moves[s.move];
   for (int i = 0; i < m.trackCount; i++) {
-    const MoveTrack& tr = c_.tracks[m.firstTrack + i];
-    if (tr.channel == channel) return c_.samples[tr.first + s.frame] / 4.0f;
+    const MoveTrack& tr = c_->tracks[m.firstTrack + i];
+    if (tr.channel == channel) return c_->samples[tr.first + s.frame] / 4.0f;
   }
   return 0.0f;
 }
 
 float Choreographer::travel(int move) const {
-  if (c_.xChannel < 0) return 0;
-  const Move& m = c_.moves[move];
+  if (c_->xChannel < 0) return 0;
+  const Move& m = c_->moves[move];
   for (int i = 0; i < m.trackCount; i++) {
-    const MoveTrack& tr = c_.tracks[m.firstTrack + i];
-    if (tr.channel == c_.xChannel) return c_.samples[tr.first + m.frames - 1] / 4.0f;
+    const MoveTrack& tr = c_->tracks[m.firstTrack + i];
+    if (tr.channel == c_->xChannel) return c_->samples[tr.first + m.frames - 1] / 4.0f;
   }
   return 0;
 }
@@ -124,11 +124,11 @@ void Choreographer::setGaze(float look, float pitch, float eyes, float weight) {
 }
 
 bool Choreographer::requestTurn(uint32_t now) {
-  if (c_.turnMove < 0 || reactionSlot()) return false;
+  if (c_->turnMove < 0 || reactionSlot()) return false;
   for (const Slot& s : slots_)
     if (s.move >= 0 && turns(s.move) && s.target > 0) return false;   // already turning
-  add(c_.turnMove, now, 1.0f, 1.0f);
-  lastIdle_ = c_.turnMove;
+  add(c_->turnMove, now, 1.0f, 1.0f);
+  lastIdle_ = c_->turnMove;
   return true;
 }
 
@@ -152,7 +152,7 @@ Choreographer::Slot* Choreographer::add(int move, uint32_t now, float weight, fl
 // that would leave the stage, preferably not the last one, and turns favoured
 // when heading toward a nearby edge.
 int Choreographer::pickVocab(Mood mood, MoveKind kind) {
-  const MoodStyle& st = c_.moods[(int)mood];
+  const MoodStyle& st = c_->moods[(int)mood];
   return pickFrom(st.firstVocab, st.vocabCount, kind, kind == MoveKind::Idle ? lastIdle_ : lastBeatMove_);
 }
 
@@ -166,7 +166,7 @@ int Choreographer::pickFrom(uint16_t first, uint8_t count, MoveKind kind, int la
   };
   uint32_t total = 0, totalAll = 0;
   for (int i = 0; i < count; i++) {
-    const VocabEntry& v = c_.vocab[first + i];
+    const VocabEntry& v = c_->vocab[first + i];
     totalAll += weight(v);
     if (v.move != last) total += weight(v);
   }
@@ -175,7 +175,7 @@ int Choreographer::pickFrom(uint16_t first, uint8_t count, MoveKind kind, int la
   if (total == 0) return -1;
   uint32_t k = rng_.range(0, total - 1);
   for (int i = 0; i < count; i++) {
-    const VocabEntry& v = c_.vocab[first + i];
+    const VocabEntry& v = c_->vocab[first + i];
     uint32_t w = weight(v);
     if (!w || (avoidLast && v.move == last)) continue;
     if (k < w) return v.move;
@@ -187,12 +187,12 @@ int Choreographer::pickFrom(uint16_t first, uint8_t count, MoveKind kind, int la
 // The intent's idle vocabulary, if it has one (never while asleep).
 const IntentStyle* Choreographer::intentStyle(Mood mood) const {
   if (mood == Mood::Asleep || intent_ == Intent::None) return nullptr;
-  const IntentStyle& is = c_.intents[(int)intent_];
+  const IntentStyle& is = c_->intents[(int)intent_];
   return is.vocabCount ? &is : nullptr;
 }
 
 void Choreographer::startIdle(Mood mood, uint32_t now) {
-  const MoodStyle& st = c_.moods[(int)mood];
+  const MoodStyle& st = c_->moods[(int)mood];
   const IntentStyle* is = intentStyle(mood);
   nextIdle_ = now + (is ? rng_.range(is->idleGapMin, is->idleGapMax) : rng_.range(st.idleGapMin, st.idleGapMax));
   int move = is ? pickFrom(is->firstVocab, is->vocabCount, MoveKind::Idle, lastIdle_) : pickVocab(mood, MoveKind::Idle);
@@ -207,7 +207,7 @@ void Choreographer::startBeat(Mood mood, uint32_t now) {
   if (reactionSlot()) return;
   for (Slot& s : slots_) {
     if (s.move < 0 || !s.beat || s.target <= 0) continue;
-    int frames = c_.moves[s.move].frames;
+    int frames = c_->moves[s.move].frames;
     if (s.frame < fmaxf(cfg_.beatRetrigger * frames, frames - cfg_.beatTailFrames)) return;
     s.target = 0;
   }
@@ -224,7 +224,7 @@ void Choreographer::fire(Trigger t, Mood mood, uint32_t now) {
   int ti = (int)t;
   Slot* r = reactionSlot();
   if (r && reactionTrigger_ == t) {               // same trigger again: extend its loop
-    if (c_.moves[r->move].loopLen) r->extend = true;
+    if (c_->moves[r->move].loopLen) r->extend = true;
     return;
   }
   if (started_[ti] && now - lastStart_[ti] < cfg_.cooldownMs) return;
@@ -238,15 +238,15 @@ void Choreographer::fire(Trigger t, Mood mood, uint32_t now) {
     r->reaction = false;
   }
   const ReactionMoves* rm = nullptr;
-  for (int i = 0; i < c_.reactionCount; i++)
-    if (c_.reactions[i].trigger == t) rm = &c_.reactions[i];
+  for (int i = 0; i < c_->reactionCount; i++)
+    if (c_->reactions[i].trigger == t) rm = &c_->reactions[i];
   if (!rm || rm->count == 0) return;
   int pick = 0;
   if (rm->count > 1) {
     pick = (int)rng_.range(0, rm->count - 2);
     if (pick >= lastVariant_[ti] && lastVariant_[ti] >= 0) pick++;
   }
-  int move = c_.reactionMoveIds[rm->first + pick];
+  int move = c_->reactionMoveIds[rm->first + pick];
 
   for (Slot& s : slots_) {                         // duck everything else
     if (s.move < 0 || s.reaction || s.target <= cfg_.duck) continue;
@@ -260,7 +260,7 @@ void Choreographer::fire(Trigger t, Mood mood, uint32_t now) {
   started_[ti] = true;
   lastStart_[ti] = now;
   lastVariant_[ti] = pick;
-  if (c_.moves[move].freezeMs) frozenUntil_ = now + c_.moves[move].freezeMs;
+  if (c_->moves[move].freezeMs) frozenUntil_ = now + c_->moves[move].freezeMs;
 }
 
 // --- events -----------------------------------------------------------------------
@@ -287,7 +287,7 @@ void Choreographer::advance(Slot& s, uint32_t now) {
   if (s.weight < s.target) s.weight = fminf(s.target, s.weight + cfg_.fadeStep);
   else if (s.weight > s.target) s.weight = fmaxf(s.target, s.weight - cfg_.fadeStep);
   if (s.target <= 0 && s.weight <= 0) { s.move = -1; return; }
-  const Move& m = c_.moves[s.move];
+  const Move& m = c_->moves[s.move];
   if (m.flipAt && s.frame + 1 == m.flipAt) facing_ = -facing_;
   s.frame++;
   if (m.loopLen && s.frame == m.loopFrom + m.loopLen) {
@@ -305,11 +305,11 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
 
   for (LiveMark& m : marks_) {                    // marks play out on their own
     if (m.mark < 0) continue;
-    if (++m.frame >= c_.marks[m.mark].frameCount) m = LiveMark();
+    if (++m.frame >= c_->marks[m.mark].frameCount) m = LiveMark();
   }
 
-  const MoodStyle& st = c_.moods[(int)mood];
-  for (int ch = 0; ch < c_.channelCount; ch++)
+  const MoodStyle& st = c_->moods[(int)mood];
+  for (int ch = 0; ch < c_->channelCount; ch++)
     stance_[ch] += (st.stance[ch] / 4.0f - stance_[ch]) * cfg_.stanceEase;
 
   bool reacting = reactionSlot() != nullptr;
@@ -318,14 +318,14 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
     startBeat(mood, now);
 
   // Travel: x tracks move the pet forward, unweighted (it really goes there).
-  if (c_.xChannel >= 0) {
+  if (c_->xChannel >= 0) {
     for (const Slot& s : slots_) {
       if (s.move < 0) continue;
-      float d = sample(s, c_.xChannel);
+      float d = sample(s, c_->xChannel);
       if (s.frame > 0) {
         Slot prev = s;
         prev.frame--;
-        d -= sample(prev, c_.xChannel);
+        d -= sample(prev, c_->xChannel);
       }
       stageX_ -= facing_ * d;
     }
@@ -335,7 +335,7 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
 
   for (const Slot& s : slots_) {                  // a move reaching its mark frame pops one up
     if (s.move < 0) continue;
-    const Move& m = c_.moves[s.move];
+    const Move& m = c_->moves[s.move];
     if (!m.mark || s.frame != m.markAt || s.weight < 0.5f) continue;
     for (LiveMark& lm : marks_) {
       if (lm.mark >= 0) continue;
@@ -347,9 +347,9 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
   }
 
   float beatAmp = cfg_.beatAmpBase + cfg_.beatAmpGain * energy;
-  for (int ch = 0; ch < c_.channelCount; ch++) {
-    if (ch == c_.xChannel) { pose_.ch[ch] = stageX_; continue; }
-    if (ch == c_.faceChannel) { pose_.ch[ch] = facing_; continue; }
+  for (int ch = 0; ch < c_->channelCount; ch++) {
+    if (ch == c_->xChannel) { pose_.ch[ch] = stageX_; continue; }
+    if (ch == c_->faceChannel) { pose_.ch[ch] = facing_; continue; }
     float v = stance_[ch];
     for (const Slot& s : slots_)
       if (s.move >= 0) v += s.weight * (s.beat ? beatAmp : 1.0f) * sample(s, ch);
@@ -357,9 +357,9 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
   }
   if (gazeWeight_ > 0) {                          // the Mind's gaze over the moves
     float w = gazeWeight_;
-    if (c_.lookChannel >= 0) pose_.ch[c_.lookChannel] += (gazeLook_ - pose_.ch[c_.lookChannel]) * w;
-    if (c_.pitchChannel >= 0) pose_.ch[c_.pitchChannel] += gazePitch_ * w;
-    if (c_.eyesChannel >= 0 && !isnan(gazeEyes_) && w >= 0.5f) pose_.ch[c_.eyesChannel] = gazeEyes_;
+    if (c_->lookChannel >= 0) pose_.ch[c_->lookChannel] += (gazeLook_ - pose_.ch[c_->lookChannel]) * w;
+    if (c_->pitchChannel >= 0) pose_.ch[c_->pitchChannel] += gazePitch_ * w;
+    if (c_->eyesChannel >= 0 && !isnan(gazeEyes_) && w >= 0.5f) pose_.ch[c_->eyesChannel] = gazeEyes_;
   }
 
   for (Slot& s : slots_)

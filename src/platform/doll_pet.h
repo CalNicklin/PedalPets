@@ -1,29 +1,35 @@
 #pragma once
-// The paper-doll pet's whole loop, shared by the board and the simulator so
-// they can't drift apart: music -> mood -> mind -> choreographer -> doll,
-// plus the leaves on the ground. Header-only (the simulator builds without
-// Arduino); scene drawing stays with the caller.
+// The pet's whole loop, shared by the board and the simulator so they can't
+// drift apart: music -> mood -> mind -> choreographer -> doll, plus the leaves
+// on the ground. It knows nothing about any particular character or scene:
+// those come in as packs (core/pack.h) and can be swapped at run time.
 #include "core/choreo.h"
 #include "core/doll.h"
 #include "core/leaves.h"
 #include "core/mind.h"
 #include "core/mood.h"
-#include "gen/doll_meta.h"
-#include "gen/doll_moves.h"
+#include "core/pack.h"
+
+constexpr int SCREEN_W = 160, SCREEN_H = 128;
 
 class DollPet {
  public:
-  explicit DollPet(Rng& rng) : mind(rng), choreo(doll_gen::CHOREO, rng), rng_(rng) {}
+  DollPet(const Character& c, Rng& rng) : mind(rng), choreo(c.choreo, rng), rng_(rng), char_(&c) {}
 
-  // leafColours 0 = no scene (no leaves).
-  void reset(uint32_t now, int leafColours, int leafCount) {
+  void setCharacter(const Character& c) { char_ = &c; choreo.bind(c.choreo); }   // then reset()
+  void setScene(const Scene* s) { scene_ = s; }                                   // then reset()
+  const Character& character() const { return *char_; }
+  const Scene*     scene() const { return scene_; }
+
+  void reset(uint32_t now, int leafCount) {
     mood.reset(now);
     mind.reset(now);
     choreo.reset(mood.mood(), now);
     motion = PetMotionSensor();
     leaves.clear();
-    if (leafColours > 0) leaves.scatter(rng_, leafCount, (uint8_t)leafColours);
-    composeDoll(doll_gen::DOLL, choreo.pose(), parts);
+    if (scene_ && scene_->leafColours) leaves.scatter(rng_, leafCount, scene_->leafColours);
+    composeDoll(char_->doll, choreo.pose(), parts);
+    markCount = 0;
   }
 
   // A music event (10 ms logic tick). The Mind may hold a sudden hit back for
@@ -43,6 +49,7 @@ class DollPet {
 
   // Once per display frame: think, move, compose, then the world reacts.
   void frame(uint32_t now) {
+    const Character& ch = *char_;
     Body body = head();
     int n = leaves.count();
     for (int i = 0; i < n; i++) {
@@ -56,37 +63,40 @@ class DollPet {
     choreo.setGaze(g.look, g.pitch, g.eyes, g.weight);
 
     choreo.tick(mood.mood(), mood.energy(), now);
-    composeDoll(doll_gen::DOLL, choreo.pose(), parts);
-    markCount = placeMarks(doll_gen::CHOREO, choreo, doll_gen::DOLL, parts, marks);
+    composeDoll(ch.doll, choreo.pose(), parts);
+    markCount = placeMarks(ch.choreo, choreo, ch.doll, parts, marks);
 
-    int fx, fy;                                   // the pet's feet, in screen pixels
-    pivotOnCanvas(doll_gen::DOLL, parts[0], &fx, &fy);
-    const DollPose& pose = choreo.pose();
-    PetMotion m = motion.update(pose.ch[doll_gen::CH_X], pose.ch[doll_gen::CH_HOP], pose.ch[doll_gen::CH_FLAPL],
-                                CANVAS_X + fx, CANVAS_Y + fy);
+    int fx, fy;                                   // the pet's feet (the ground part's pivot), on screen
+    pivotOnCanvas(ch.doll, parts[0], &fx, &fy);
+    PetMotion m = motion.update(channel(ch.doll.xChannel), channel(ch.doll.hopChannel), channel(ch.gustChannel),
+                                canvasX() + fx, canvasY() + fy);
     leaves.step(rng_, m);
   }
+
+  int canvasX() const { return (SCREEN_W - char_->canvasW) / 2; }   // the doll canvas, bottom-centred
+  int canvasY() const { return SCREEN_H - char_->canvasH; }
 
   MoodModel       mood;
   Mind            mind;
   Choreographer   choreo;
   LeafField       leaves;
   PetMotionSensor motion;
-  DollPlacement   parts[doll_gen::PART_COUNT];
+  DollPlacement   parts[DOLL_MAX_PARTS];
   MarkPlacement   marks[CHOREO_MAX_MARKS];
   int             markCount = 0;
 
-  static constexpr int CANVAS_X = (160 - doll_gen::CANVAS_W) / 2;   // the doll canvas on screen
-  static constexpr int CANVAS_Y = 128 - doll_gen::CANVAS_H;
-
  private:
+  float channel(int c) const { return c >= 0 ? choreo.pose().ch[c] : 0.0f; }
+
   Body head() const {
-    int hx, hy;
-    pivotOnCanvas(doll_gen::DOLL, parts[doll_gen::P_HEAD], &hx, &hy);
-    const DollPose& p = choreo.pose();
-    return {(float)(CANVAS_X + hx), (float)(CANVAS_Y + hy), p.ch[doll_gen::CH_FACE], p.ch[doll_gen::CH_HOP]};
+    int hx = 0, hy = 0;
+    if (char_->headPart >= 0) pivotOnCanvas(char_->doll, parts[char_->headPart], &hx, &hy);
+    float face = char_->doll.faceChannel >= 0 ? channel(char_->doll.faceChannel) : 1.0f;
+    return {(float)(canvasX() + hx), (float)(canvasY() + hy), face, channel(char_->doll.hopChannel)};
   }
 
-  Rng&     rng_;
-  Sighting sightings_[MAX_LEAVES];
+  Rng&             rng_;
+  const Character* char_;
+  const Scene*     scene_ = nullptr;
+  Sighting         sightings_[MAX_LEAVES];
 };

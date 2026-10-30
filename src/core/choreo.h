@@ -103,6 +103,7 @@ constexpr int CHOREO_MAX_MARKS  = 3;
 class Choreographer {
  public:
   Choreographer(const Choreography& c, Rng& rng, const ChoreoConfig& cfg = ChoreoConfig());
+  void bind(const Choreography& c) { c_ = &c; }       // another character (then reset)
 
   void reset(Mood mood, uint32_t now);
   void onEvent(const MusicEvent& e, Mood mood, uint32_t now);
@@ -145,9 +146,9 @@ class Choreographer {
   float sample(const Slot& s, int channel) const;
   float travel(int move) const;              // forward distance a move covers (pixels)
   bool  allowed(int move) const;             // stays on stage?
-  bool  turns(int move) const { return c_.moves[move].flipAt != 0; }
+  bool  turns(int move) const { return c_->moves[move].flipAt != 0; }
 
-  const Choreography& c_;
+  const Choreography* c_;
   Rng&                rng_;
   ChoreoConfig        cfg_;
   Slot                slots_[CHOREO_MAX_ACTIVE];

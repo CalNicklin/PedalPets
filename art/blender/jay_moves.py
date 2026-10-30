@@ -1,7 +1,7 @@
 """The jay's movement vocabulary for the paper-doll choreographer.
 
 Pure Python (no Blender): tools/build_moves.py turns this into
-src/gen/doll_moves.h. Channels and units (see jay_doll.py):
+src/gen/chars/jay/doll_moves.h. Channels and units (see jay_doll.py):
   hop px · legs -1 tuck (airborne)/0 stand/1 crouch/2 low · stride -1..1 (+ near leg forward) · lean° (+forward)
   squash -1 stretch/0/1/2 big/3 fluff · pitch° (+down) · look° · eyes -1 wide/0/1 half/2 closed
   jaw° (+open) · crest° (+flat back, - raised) · tail° (+up) · flapL/flapR° (0 folded .. 165 high V)
@@ -236,6 +236,8 @@ INTENTS = {
     "Investigate": {"vocab": [("hop_fwd", 4), ("peck", 3), ("hop_small", 1)], "gap": (300, 800)},
 }
 TURN_MOVE = "turn_round"
+# Roles the engine needs: the head (gaze, marks) and the channel that gusts leaves.
+ROLES = {"head": "head", "gust": "flapL"}
 
 REACTIONS = {
     "BigHit": ["startle"], "Flurry": ["flutter"], "Sustain": ["sing"], "Swell": ["launch"], "Cut": ["point"],

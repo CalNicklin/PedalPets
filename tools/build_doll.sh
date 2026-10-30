@@ -1,6 +1,6 @@
 #!/bin/sh
 # Render a paper-doll character's parts, ink them, compile its moves, and
-# regenerate the firmware headers (the next firmware build shows that doll).
+# regenerate its pack in src/gen/chars/<character>/ (the firmware includes every pack).
 #   tools/build_doll.sh <character>        e.g. tools/build_doll.sh jay
 set -e
 cd "$(dirname "$0")/.."
@@ -14,5 +14,5 @@ rm -rf "$DOLL/poses"
 mkdir -p "$DOLL"
 uv run -q tools/ink.py "$WORK/raw" "$DOLL/poses" --palette "$WORK/parts.json"
 cp "$WORK/parts.json" "$DOLL/parts.json"
-uv run -q tools/build_doll.py "$DOLL"
-python3 tools/build_moves.py "art/blender/${CHAR}_moves.py" "$DOLL/parts.json"
+uv run -q tools/build_doll.py "$DOLL" "$CHAR"
+python3 tools/build_moves.py "art/blender/${CHAR}_moves.py" "$DOLL/parts.json" "$CHAR"

@@ -72,6 +72,8 @@ def test_unknown_channel(tmp_path):
 
 def test_emit_compiles_as_plain_cpp(tmp_path):
     t = bd.build(make_doll(tmp_path, two_parts()))
-    text = bd.emit_meta(t)
-    assert "static const DollTables DOLL" in text
+    text = bd.emit_meta(t, "toy_gen")
+    assert "static const DollTables DOLL" in text and "namespace toy_gen {" in text
     assert "#include <Arduino.h>" not in text
+    pixels = bd.emit_pixels(t, "toy_gen")
+    assert "PROGMEM" not in pixels and "#include <Arduino.h>" not in pixels   # the simulator compiles packs too
