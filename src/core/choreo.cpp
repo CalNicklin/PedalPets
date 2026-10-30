@@ -322,8 +322,10 @@ void Choreographer::tick(Mood mood, float energy, uint32_t now) {
   }
 
   const MoodStyle& st = c_->moods[(int)mood];
+  // The intent's posture on top of the mood's (while awake): bored slumps, wanting you perks up.
+  const IntentStyle* posture = mood != Mood::Asleep && intent_ != Intent::None ? &c_->intents[(int)intent_] : nullptr;
   for (int ch = 0; ch < c_->channelCount; ch++)
-    stance_[ch] += (st.stance[ch] / 4.0f - stance_[ch]) * cfg_.stanceEase;
+    stance_[ch] += ((st.stance[ch] + (posture ? posture->stance[ch] : 0)) / 4.0f - stance_[ch]) * cfg_.stanceEase;
 
   bool reacting = reactionSlot() != nullptr;
   if (!reacting && (int32_t)(now - nextIdle_) >= 0) startIdle(mood, now);

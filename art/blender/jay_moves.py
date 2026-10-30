@@ -229,10 +229,11 @@ BEAT_MS = {"Asleep": 0, "Curious": 0, "IntoIt": 560, "Hyped": 480}
 # these are what the body does meanwhile.
 INTENTS = {
     "Watch":       {"vocab": [("blink", 3), ("tail_flick", 2), ("crest_flick", 1)], "gap": (900, 2000)},
-    "Bored":       {"vocab": [("peck", 4), ("preen", 3), ("tail_flick", 2), ("shake", 1), ("hop_fwd", 2),
-                              ("hop_small", 1), ("double_blink", 1), ("yawn", 1)], "gap": (900, 2200)},
+    "Bored":       {"vocab": [("preen", 3), ("yawn", 2), ("shake", 1), ("double_blink", 2), ("tail_flick", 1),
+                              ("peck", 1)], "gap": (1800, 4000),
+                    "stance": {"eyes": 1, "pitch": 12, "crest": 40, "tail": -10, "squash": 1, "flapL": -2, "flapR": -2}},
     "WantsYou":    {"vocab": [("hop_small", 3), ("crest_flick", 3), ("tail_flick", 2), ("wing_flick", 2),
-                              ("hop_fwd", 1)], "gap": (600, 1400)},
+                              ("hop_fwd", 1)], "gap": (600, 1400), "stance": {"crest": -20, "squash": -0.5}},
     "Investigate": {"vocab": [("hop_fwd", 4), ("peck", 3), ("hop_small", 1)], "gap": (300, 800)},
 }
 TURN_MOVE = "turn_round"

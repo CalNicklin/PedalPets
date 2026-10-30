@@ -127,7 +127,12 @@ def build(mod, channels):
                     raise MovesError(f"intent {intent}: unknown move {mv!r}")
                 vocab.append((names.index(mv), weight, "Idle"))
         gap = spec["gap"] if spec else (0, 0)
-        intents.append((first, len(vocab) - first, gap[0], gap[1]))
+        posture = [0] * len(channels)
+        for ch, v in (spec or {}).get("stance", {}).items():
+            if ch not in channels:
+                raise MovesError(f"intent {intent} stance: unknown channel {ch!r}")
+            posture[channels.index(ch)] = int(round(v * 4))
+        intents.append((first, len(vocab) - first, gap[0], gap[1], posture))
     turn = getattr(mod, "TURN_MOVE", None)
     if turn is not None and turn not in names:
         raise MovesError(f"unknown TURN_MOVE {turn!r}")
@@ -215,7 +220,7 @@ def emit(t, marks, anchor, ns):
     fi = ch.index("face") if "face" in ch else -1
     out += ["  },", f"  VOCAB, REACTIONS, {len(t['reactions'])}, REACTION_MOVE_IDS, {len(ch)}, {xi}, {fi},",
             f"  MARK_ANIMS, MARK_FRAMES, {len(marks['anims'])}, MARK_SIZES, {anchor},",
-            "  {" + ", ".join(f"{{{f}, {n}, {a}, {b}}}" for f, n, a, b in t["intents"]) + "},",
+            "  {" + ", ".join(f"{{{f}, {n}, {a}, {b}, {{{', '.join(map(str, p))}}}}}" for f, n, a, b, p in t["intents"]) + "},",
             f"  {idx('look')}, {idx('pitch')}, {idx('eyes')}, {t['turn']}, {idx('stride')},",
             "};", "", f"}}  // namespace {ns}", ""]
     return "\n".join(out)

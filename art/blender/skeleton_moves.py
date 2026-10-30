@@ -135,6 +135,11 @@ move("pick_up", 100, solo=True, legs=[(0, 0), (12, 2), (22, 2), (34, 0), (100, 0
      **arms(r={"arm": [(0, 0), (12, 6), (22, 6), (34, 112), (64, 112), (72, 50), (78, 165), (86, 130), (100, 0)],
                "elbow": [(0, 0), (12, 0), (22, 0), (34, 118), (64, 118), (72, 140), (78, 0), (100, 0)],
                "hand": [(0, 0), (16, 0), (18, 1), (77, 1), (79, 0), (100, 0)]}))
+# A big bored sigh: breathe in (stretch up), let it all out (slump), a shake of the skull.
+move("sigh", 50, squash=[(0, 0), (12, -1), (20, -1), (30, 1), (44, 0.5), (50, 0)],
+     pitch=[(0, 0), (12, -10), (20, -10), (30, 16), (44, 10), (50, 0)],
+     jaw=[(0, 0), (12, 12), (20, 12), (28, 4), (50, 0)], look=[(0, 0), (32, 0), (36, 12), (40, -12), (44, 0), (50, 0)],
+     **arms(r={"arm": [(0, 0), (12, 12), (30, -4), (50, 0)]}, l={"arm": [(0, 0), (12, -12), (30, 4), (50, 0)]}))
 # Asleep: slumped, the odd jaw twitch.
 move("breathe", 60, lean=[(0, 0), (30, 3), (60, 0)], pitch=[(0, 0), (30, 4), (60, 0)], jaw=[(0, 0), (30, 4), (60, 0)])
 move("twitch", 14, jaw=[(0, 0), (3, 12), (7, 0), (14, 0)], **arms(l={"elbow": [(0, 0), (4, -20), (14, 0)]}))
@@ -244,10 +249,9 @@ STANCES = {
 VOCAB = {
     "Asleep":  [("breathe", 6, "idle"), ("twitch", 1, "idle")],
     "Curious": [("look_l", 3, "idle"), ("look_r", 3, "idle"), ("tilt", 2, "idle"), ("blink", 4, "idle"),
-                ("double_blink", 1, "idle"), ("chatter", 1, "idle"), ("scratch", 2, "idle"), ("tap_foot", 1, "idle"),
-                ("knuckles", 1, "idle"), ("stretch", 1, "idle"), ("hop_small", 1, "idle"), ("walk", 6, "idle"),
-                ("walk_long", 4, "idle"), ("step", 2, "idle"), ("turn_round", 4, "idle"), ("inspect", 1, "idle"),
-                ("shrug", 1, "idle"), ("sit", 1, "idle"), ("sweep", 1, "idle")],
+                ("double_blink", 1, "idle"), ("chatter", 1, "idle"), ("scratch", 2, "idle"), ("hop_small", 2, "idle"),
+                ("walk", 6, "idle"), ("walk_long", 4, "idle"), ("step", 2, "idle"), ("turn_round", 4, "idle"),
+                ("inspect", 2, "idle"), ("sweep", 1, "idle")],
     "IntoIt":  [("nod", 4, "beat"), ("bob", 3, "beat"), ("side_nod", 2, "beat"), ("snap", 3, "beat"), ("strum", 4, "beat"),
                 ("fist_pump", 2, "beat"), ("shimmy", 2, "beat"), ("hop_beat", 1, "beat"), ("strut", 4, "beat"),
                 ("blink", 3, "idle"), ("chatter", 1, "idle"), ("turn_round", 1, "idle")],
@@ -260,10 +264,14 @@ BEAT_MS = {"Asleep": 0, "Curious": 0, "IntoIt": 560, "Hyped": 600}
 
 INTENTS = {
     "Watch":       {"vocab": [("shade_eyes", 3), ("blink", 2), ("tilt", 1)], "gap": (700, 1600)},
-    "Bored":       {"vocab": [("tap_foot", 2), ("chatter", 1), ("knuckles", 1), ("scratch", 2), ("sweep", 2),
-                              ("lie_back", 3), ("sit", 2), ("shrug", 1), ("stretch", 1), ("walk", 3), ("walk_long", 2),
-                              ("turn_round", 2), ("yawn", 1)], "gap": (900, 2200)},
-    "WantsYou":    {"vocab": [("wave", 4), ("beckon", 3), ("shrug", 2), ("hop_small", 1)], "gap": (600, 1400)},
+    # Bored stops exploring: it slumps where it is and fidgets, slowly.
+    "Bored":       {"vocab": [("sigh", 3), ("tap_foot", 2), ("knuckles", 1), ("lie_back", 3), ("sit", 3),
+                              ("shrug", 1), ("stretch", 1), ("yawn", 1), ("chatter", 1), ("double_blink", 1)],
+                    "gap": (1800, 4000),
+                    "stance": {"pitch": 14, "eyes": 1, "lean": 6, "squash": 0.5, "jaw": 6,
+                               "armR": -4, "armL": 4, "elbowR": -8, "elbowL": 8, "look": -15}},
+    "WantsYou":    {"vocab": [("wave", 4), ("beckon", 3), ("shrug", 2), ("hop_small", 1)], "gap": (600, 1400),
+                    "stance": {"pitch": -6, "squash": -0.5, "lean": -4}},   # perks up
     "Investigate": {"vocab": [("blink", 2), ("tilt", 1)], "gap": (600, 1400)},   # the Mind asks for step / pick_up
 }
 TURN_MOVE = "turn_round"

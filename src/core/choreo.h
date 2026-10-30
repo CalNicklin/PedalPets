@@ -51,7 +51,10 @@ struct MoodStyle {
 struct ReactionMoves { Trigger trigger; uint8_t first; uint8_t count; };  // into reactionMoveIds
 
 // An intent's idle vocabulary (into vocab); vocabCount 0 = keep the mood's.
-struct IntentStyle { uint16_t firstVocab; uint8_t vocabCount; uint16_t idleGapMin, idleGapMax; };
+struct IntentStyle {
+  uint16_t firstVocab; uint8_t vocabCount; uint16_t idleGapMin, idleGapMax;
+  int16_t  stance[DOLL_MAX_CHANNELS];   // a posture on top of the mood's (quarter units): bored slumps
+};
 
 struct Choreography {
   const Move*          moves;

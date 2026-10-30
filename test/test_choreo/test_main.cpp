@@ -68,7 +68,7 @@ static Choreography make() {
   c.moods[(int)Mood::IntoIt].vocabCount = 1;
   c.moods[(int)Mood::IntoIt].idleGapMin = 60000;
   c.moods[(int)Mood::IntoIt].idleGapMax = 60000;
-  c.intents[(int)Intent::Bored] = {2, 1, 300, 300};     // bored: hop forward every 300 ms
+  c.intents[(int)Intent::Bored] = {2, 1, 300, 300, {0, 8}};   // bored: hop forward every 300 ms, a = +2 (slump)
   c.lookChannel = 1; c.pitchChannel = 2; c.eyesChannel = -1;
   c.turnMove = TURN;
   c.strideChannel = -1;
@@ -223,6 +223,16 @@ void test_a_solo_move_plays_alone() {
   TEST_ASSERT_TRUE(ch->weightOf(IDLE_A) > 0);
 }
 
+void test_an_intent_has_its_own_posture() {
+  fresh(Mood::Curious);
+  ch->setIntent(Intent::Bored);
+  frames(Mood::Curious, 60);                              // eases into it
+  TEST_ASSERT_FLOAT_WITHIN(0.1f, 2.0f, ch->pose().ch[1]);
+  ch->setIntent(Intent::None);
+  frames(Mood::Curious, 60);                              // and out of it
+  TEST_ASSERT_FLOAT_WITHIN(0.1f, 0.0f, ch->pose().ch[1]);
+}
+
 void test_reaction_ducks_other_moves() {
   fresh(Mood::Curious);
   frames(Mood::Curious, 10);
@@ -341,6 +351,7 @@ int main(int, char**) {
   RUN_TEST(test_gait_channel_is_never_amplified_by_the_beat);
   RUN_TEST(test_requested_move_plays_once_at_a_time);
   RUN_TEST(test_a_solo_move_plays_alone);
+  RUN_TEST(test_an_intent_has_its_own_posture);
   RUN_TEST(test_reaction_ducks_other_moves);
   RUN_TEST(test_reaction_fades_in_not_cut);
   RUN_TEST(test_lower_priority_ignored_during_reaction);
