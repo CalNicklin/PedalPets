@@ -135,9 +135,14 @@ class Claude:
         def run():
             try:
                 self.history = (self.history + [{"role": "user", "content": json.dumps(s)}])[-8:]
+                while self.history and self.history[0]["role"] != "user":   # must open with a summary
+                    self.history.pop(0)
+                # No extended thinking: Haiku 5.5 thinks by default, which spends the small
+                # budget before it answers; this is a quick inner voice, not a puzzle.
                 msg = self.client.messages.create(model=MODEL, max_tokens=120, system=self.system,
-                                                  messages=self.history, timeout=8)
-                text = msg.content[0].text.strip()
+                                                  messages=self.history, thinking={"type": "disabled"},
+                                                  timeout=8)
+                text = "".join(b.text for b in msg.content if b.type == "text").strip()
                 self.history.append({"role": "assistant", "content": text})
                 log({"type": "reply", "t": s["t"], "raw": text, "ms": int((time.time() - started) * 1000),
                      "tokens": {"in": msg.usage.input_tokens, "out": msg.usage.output_tokens}})
@@ -147,6 +152,8 @@ class Claude:
                     d = {}
                 send(d, s)
             except Exception as e:  # network trouble: the pet carries on regardless
+                if self.history and self.history[-1]["role"] == "user":
+                    self.history.pop()                     # no answer: forget the question
                 log({"type": "error", "t": s["t"], "error": str(e)})
                 print(f"director: {e}", file=sys.stderr)
             finally:
