@@ -281,6 +281,16 @@ void test_an_intent_has_its_own_posture() {
   TEST_ASSERT_FLOAT_WITHIN(0.1f, 0.0f, ch->pose().ch[1]);
 }
 
+void test_past_the_edge_it_can_still_move_in_place_or_back() {
+  fresh(Mood::Curious);
+  ch->play(HOP_FWD, t);                                   // 6 px forward each
+  for (int i = 0; i < 10; i++) frames(Mood::Curious, 7), ch->play(HOP_FWD, t);
+  frames(Mood::Curious, 7);                               // now beyond the stage (a reaction can do this too)
+  bool played = false;                                    // idles that stay put still play
+  for (int i = 0; i < 30; i++) { frames(Mood::Curious, 1); played |= ch->weightOf(IDLE_A) > 0; }
+  TEST_ASSERT_TRUE(played);
+}
+
 void test_reaction_ducks_other_moves() {
   fresh(Mood::Curious);
   frames(Mood::Curious, 10);
@@ -402,6 +412,7 @@ int main(int, char**) {
   RUN_TEST(test_requested_move_plays_once_at_a_time);
   RUN_TEST(test_a_solo_move_plays_alone);
   RUN_TEST(test_an_intent_has_its_own_posture);
+  RUN_TEST(test_past_the_edge_it_can_still_move_in_place_or_back);
   RUN_TEST(test_reaction_ducks_other_moves);
   RUN_TEST(test_reaction_fades_in_not_cut);
   RUN_TEST(test_lower_priority_ignored_during_reaction);

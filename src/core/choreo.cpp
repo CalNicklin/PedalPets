@@ -110,7 +110,10 @@ float Choreographer::travel(int move) const {
 
 bool Choreographer::allowed(int move) const {
   float x = stageX_ - facing_ * travel(move);   // forward is screen-left when facing +1
-  return x >= cfg_.stageMin && x <= cfg_.stageMax;
+  if (x >= cfg_.stageMin && x <= cfg_.stageMax) return true;
+  // Already past an edge (a reaction can carry it there): staying put or
+  // heading back in is fine; only going further out isn't.
+  return fabsf(x) <= fabsf(stageX_);
 }
 
 // --- starting moves ---------------------------------------------------------------

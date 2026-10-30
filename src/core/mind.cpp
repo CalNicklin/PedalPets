@@ -237,7 +237,7 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
     say(familiarity_ >= cfg_.friendAt ? "you're back!" : stranger ? "who's this?" : "oh - hi!", now, cfg_.sayMs, true);
   }
   if (mood == Mood::Hyped && !saidHyped_) {                     // the first time it really gets going
-    say("yes! this rocks!", now, cfg_.sayMs, false);
+    say("yes, dude!", now, cfg_.sayMs, false);
     saidHyped_ = true;
   } else if (mood == Mood::Curious || mood == Mood::Asleep) {
     saidHyped_ = false;
@@ -311,7 +311,7 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
     case Intent::WantsYou:    think("hey... play something"); break;
     case Intent::Bored:       think("bored - fidgeting"); break;
     case Intent::None:
-      if (mood == Mood::Hyped) think("yes! this rocks");
+      if (mood == Mood::Hyped) think("yes, dude!");
       else if (mood == Mood::IntoIt) think(focus_ == Focus::Leaf ? "grooving - eyeing a leaf" : "grooving with you");
       else think(focus_ == Focus::You ? "listening to you" : "looking around");
       break;

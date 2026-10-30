@@ -71,11 +71,7 @@ void frame(uint32_t t, uint32_t now) {
                   rx >= 0 ? pet.character().moveNames[rx] : nullptr, pet.mind.thought()};
   CritterView crowd[CROWD_MAX];
   int crowdCount = pet.critters(crowd);
-  Bubble bubble = {pet.mind.line(t), 0, 0, 0, 0, true};
-  if (bubble.text) {
-    pet.headBox(&bubble.headX0, &bubble.headY0, &bubble.headX1, &bubble.headY1);
-    bubble.facingLeft = pet.parts[0].flip == false;
-  }
+  Bubble bubble = {pet.mind.line(t)};
   uint32_t start = micros();
   renderer.drawDoll(pet.character(), scene, pet.parts, pet.marks, pet.markCount, &pet.leaves, crowd, crowdCount,
                     &bubble, hud ? &info : nullptr);

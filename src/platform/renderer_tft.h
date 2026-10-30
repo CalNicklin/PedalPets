@@ -11,19 +11,17 @@ struct HudInfo {
   const char* thought;
 };
 
-// A speech bubble: what to say, and the head's box on screen to put it by.
+// What the pet says: shown as a comic caption box in the bottom-right corner.
 struct Bubble {
   const char* text;      // nullptr: nothing to say
-  int         headX0, headY0, headX1, headY1;
-  bool        facingLeft;
 };
 
 class RendererTft {
  public:
   void begin();
   // The scene's backdrop, its crowd and leaves, the character's parts back to
-  // front, its expression marks and speech bubble on top. scene == nullptr draws
-  // a plain background.
+  // front, its expression marks and caption on top. scene == nullptr draws a
+  // plain background.
   void drawDoll(const Character& c, const Scene* scene, const DollPlacement* parts, const MarkPlacement* marks,
                 int markCount, const LeafField* leaves, const struct CritterView* crowd, int crowdCount,
                 const Bubble* bubble, const HudInfo* hud);
@@ -33,7 +31,7 @@ class RendererTft {
   void finish(const HudInfo* hud);
   void blitPal4(const uint8_t* src, int w, int h, int x0, int y0, bool flip, const uint16_t* palette);
   void drawLeaves(const Scene& scene, const LeafField& leaves, bool front);
-  void drawBubble(const Bubble& b);
+  void drawCaption(const char* text);
   static void swapPalette(const uint16_t* in, uint16_t* out);
 
   TFT_eSPI         tft_;

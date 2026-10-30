@@ -45,7 +45,6 @@ class Art:
         self.canvas = meta["canvas"]
         self.order = [next(i for i, p in enumerate(meta["parts"]) if p["name"] == n) for n in meta["draw_order"]]
         self.part_names = [p["name"] for p in meta["parts"]]
-        self.head = "skull" if "skull" in self.part_names else "head"
         self.crops, self.pivots, self.labels = [], [], []
         for p in meta["parts"]:
             for img in p["images"]:
@@ -93,29 +92,25 @@ class Art:
         return img
 
     def draw_bubble(self, img, row):
-        """Roughly as the board draws it (renderer_tft.cpp drawBubble): above the head, 6 px font."""
+        """As the board draws it (renderer_tft.cpp drawCaption): a yellow comic caption, bottom right."""
         from PIL import ImageFont
-        words, lines = row["say"].split(), [""]
+        words, lines = row["say"].replace(";", ",").split(), [""]
         for w in words:
             if len(lines[-1]) + len(w) + (1 if lines[-1] else 0) <= 19:
                 lines[-1] = (lines[-1] + " " + w).strip()
             elif len(lines) < 2:
                 lines.append(w)
-        k = self.part_names.index(self.head) if self.head in self.part_names else 2
-        n, x, y = row["parts"][k]
-        hw, hh = self.crops[n].size
-        hx0, hy0 = self.ox + x, self.oy + y
-        w, h = max(len(l) for l in lines) * 6 + 8, len(lines) * 9 + 5
-        bx, by = hx0 + hw // 2 - w // 2, hy0 - h - 7
-        if by < 1:
-            by = 1
-            bx = hx0 + hw + 4 if not row["flip"] else hx0 - w - 4
-        bx = max(1, min(SCREEN_W - 1 - w, bx))
+        lines = [l.upper() for l in lines]
+        w, h = max(len(l) for l in lines) * 6 + 7, len(lines) * 9 + 5
+        x, y = SCREEN_W - w - 2, SCREEN_H - h - 2
         d = ImageDraw.Draw(img)
-        d.rounded_rectangle([bx, by, bx + w - 1, by + h - 1], 4, fill=(255, 255, 255), outline=(28, 24, 32))
+        ink, fill = (28, 24, 32), (255, 228, 92)
+        d.rectangle([x + 1, y + 1, x + w, y + h], fill=ink)
+        d.rectangle([x - 1, y - 1, x + w - 2, y + h - 2], fill=ink)
+        d.rectangle([x, y, x + w - 3, y + h - 3], fill=fill)
         font = ImageFont.load_default(size=8)
         for i, l in enumerate(lines):
-            d.text((bx + (w - len(l) * 6) // 2 + 1, by + 2 + i * 9), l, fill=(28, 24, 32), font=font)
+            d.text((x + 3, y + 1 + i * 9), l, fill=ink, font=font)
 
     def mask(self, row):
         m = Image.new("L", (SCREEN_W, SCREEN_H), 0)

@@ -96,8 +96,10 @@ move("shake", 26, look=[(0, 0), (4, 18), (8, -18), (12, 18), (16, -12), (22, 0),
      tail=[(0, 0), (5, 12), (10, -8), (16, 6), (26, 0)])
 
 # Asleep
-move("breathe", 60, pitch=[(0, 0), (30, 5), (60, 0)], tail=[(0, 0), (30, -4), (60, 0)])
-move("twitch", 14, crest=[(0, 0), (3, -14), (14, 0)], tail=[(0, 0), (4, 10), (14, 0)])
+# Sleeping breath: a slow swell (the body's shape steps in quarters, so it's
+# smooth). No head tilt: a pitch step swaps the whole head's image, which jerks.
+move("breathe", 60, squash=[(0, 0), (30, 0.5), (60, 0)])
+move("twitch", 14, crest=[(0, 0), (3, -14), (14, 0)])
 
 # --- groove: beat moves --------------------------------------------------------
 move("nod", 14, pitch=[(0, 0), (4, 16), (9, -4), (14, 0)], lean=[(0, 0), (4, 5), (14, 0)],

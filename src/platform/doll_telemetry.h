@@ -20,6 +20,15 @@ inline int dollTelemetryHeader(char* b, int n, int parts) {
   return k;
 }
 
+// Text into a CSV field: commas would split it, so they become semicolons.
+inline int csvText(char* b, int n, const char* text) {
+  int k = 0;
+  if (!text) text = "-";
+  for (; *text && k < n - 1; text++) b[k++] = *text == ',' ? ';' : *text;
+  b[k] = 0;
+  return k;
+}
+
 // leafSprite(i) -> sprite index (or -1 for no scene).
 template <typename LeafSprite>
 inline int dollTelemetryRow(char* b, int n, uint32_t t, int mood, float energy, const char* reaction,
@@ -27,8 +36,9 @@ inline int dollTelemetryRow(char* b, int n, uint32_t t, int mood, float energy, 
                             const MarkPlacement* marks, int markCount, const LeafField* leaves,
                             float feetY, LeafSprite leafSprite, const CritterView* crowd = nullptr,
                             int crowdCount = 0, const char* say = nullptr) {
-  int k = snprintf(b, n, "%u,%d,%.3f,%s,%s,", (unsigned)t, mood, energy, reaction ? reaction : "-",
-                   thought ? thought : "-");
+  int k = snprintf(b, n, "%u,%d,%.3f,%s,", (unsigned)t, mood, energy, reaction ? reaction : "-");
+  k += csvText(b + k, n - k, thought);
+  k += snprintf(b + k, n - k, ",");
   if (frameUs >= 0) k += snprintf(b + k, n - k, "%ld", frameUs);
   k += snprintf(b + k, n - k, ",%d", parts[0].flip ? 1 : 0);
   for (int i = 0; i < partCount; i++) k += snprintf(b + k, n - k, ",%u,%d,%d", parts[i].image, parts[i].x, parts[i].y);
@@ -50,6 +60,7 @@ inline int dollTelemetryRow(char* b, int n, uint32_t t, int mood, float energy, 
     else
       k += snprintf(b + k, n - k, ",-1,0,0,0");
   }
-  k += snprintf(b + k, n - k, ",%s", say ? say : "-");   // lines never contain commas
+  k += snprintf(b + k, n - k, ",");
+  k += csvText(b + k, n - k, say);
   return k;
 }

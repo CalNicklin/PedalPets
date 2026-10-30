@@ -141,8 +141,10 @@ move("sigh", 50, squash=[(0, 0), (12, -1), (20, -1), (30, 1), (44, 0.5), (50, 0)
      jaw=[(0, 0), (12, 12), (20, 12), (28, 4), (50, 0)], look=[(0, 0), (32, 0), (36, 12), (40, -12), (44, 0), (50, 0)],
      **arms(r={"arm": [(0, 0), (12, 12), (30, -4), (50, 0)]}, l={"arm": [(0, 0), (12, -12), (30, 4), (50, 0)]}))
 # Asleep: slumped, the odd jaw twitch.
-move("breathe", 60, lean=[(0, 0), (30, 3), (60, 0)], pitch=[(0, 0), (30, 4), (60, 0)], jaw=[(0, 0), (30, 4), (60, 0)])
-move("twitch", 14, jaw=[(0, 0), (3, 12), (7, 0), (14, 0)], **arms(l={"elbow": [(0, 0), (4, -20), (14, 0)]}))
+# Sleeping breath: a slow swell of the ribcage and the jaw. Nothing that leans or
+# tilts: one lean step swaps the whole body's image, which jerks.
+move("breathe", 60, squash=[(0, 0), (30, 0.5), (60, 0)], jaw=[(0, 0), (30, 4), (60, 0)])
+move("twitch", 14, jaw=[(0, 0), (3, 10), (7, 0), (14, 0)])   # a dreaming jaw twitch (an arm twitch reads as a glitch)
 
 # --- the groove: a bar of two beats, looped in time with the music ------------------
 # Sampled by the beat clock's phase (0 = on the beat), so frame counts are just
