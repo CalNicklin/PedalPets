@@ -49,7 +49,7 @@ def build(doll_dir):
     index = {n: i for i, n in enumerate(names)}
 
     children = {n: [c["name"] for c in meta["parts"] if c.get("parent") == n] for n in names}
-    parts, images, anchors, axis_values, pixels = [], [], [], [], []
+    parts, images, anchors, axis_values, pixels, tips = [], [], [], [], [], []
     for i, p in enumerate(meta["parts"]):
         parent = p.get("parent")
         if parent is not None and index.get(parent, len(names)) >= i:
@@ -75,12 +75,20 @@ def build(doll_dir):
                 anchors.append((q4(ax), q4(ay)))
             images.append((box[0], box[1], box[2] - box[0], box[3] - box[1],
                            q4(img["pivot"][0]), q4(img["pivot"][1]), first_anchor))
+            tip = img.get("tip")
+            tips.append((q4(tip[0]), q4(tip[1])) if tip else (0, 0))
             pixels.append(ba.pack_pal4(crop, pal, f"{p['name']}/{img['file']}"))
+        lift = 0
+        for src in p.get("lift", []):
+            if src not in channels:
+                fail(f"part {p['name']} lift: unknown channel {src!r}")
+            lift |= 1 << channels.index(src)
         parts.append({"name": p["name"], "parent": index[parent] if parent else -1,
                       "slot": children[parent].index(p["name"]) if parent else 0,
-                      "axes": axes, "first_image": first_image, "count": len(p["images"])})
+                      "axes": axes, "first_image": first_image, "count": len(p["images"]),
+                      "lift": lift, "tip": bool(p.get("tip"))})
 
-    return {"parts": parts, "images": images, "anchors": anchors, "axis_values": axis_values,
+    return {"parts": parts, "images": images, "anchors": anchors, "axis_values": axis_values, "tips": tips,
             "pixels": pixels, "palette": pal, "channels": channels,
             "draw_order": [index[n] for n in meta["draw_order"]],
             "hop": channels.index("hop") if "hop" in channels else -1,
@@ -108,12 +116,16 @@ def emit_meta(t, ns):
     for p in t["parts"]:
         axes = [f"{{{c}, {f}, {m}}}" for c, f, m in p["axes"]] + ["{0, 0, 0}"] * (3 - len(p["axes"]))
         out.append(f"  {{{p['parent']}, {p['slot']}, {len(p['axes'])}, {{{', '.join(axes)}}}, "
-                   f"{p['first_image']}, {p['count']}}},  // {p['name']}")
+                   f"{p['first_image']}, {p['count']}, {p['lift']}u, {'true' if p['tip'] else 'false'}}},  // {p['name']}")
     out.append("};")
     out.append("static const uint8_t DRAW_ORDER[] = {" + ", ".join(map(str, t["draw_order"])) + "};")
+    has_tips = any(p["tip"] for p in t["parts"])
+    if has_tips:
+        out.append("static const DollAnchor TIPS[] = {" + ", ".join(f"{{{x}, {y}}}" for x, y in t["tips"]) + "};")
     out += ["", "static const DollTables DOLL = {",
             f"  PARTS, {len(t['parts'])}, DRAW_ORDER, IMAGES, ANCHORS, AXIS_VALUES,",
-            f"  {len(t['channels'])}, {t['hop']}, {t['x']}, {t['face']},", "};", "", f"}}  // namespace {ns}", ""]
+            f"  {len(t['channels'])}, {t['hop']}, {t['x']}, {t['face']}, {'TIPS' if has_tips else 'nullptr'},", "};",
+            "", f"}}  // namespace {ns}", ""]
     return "\n".join(out)
 
 

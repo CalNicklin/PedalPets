@@ -4,7 +4,7 @@
 #include "scripts.h"
 
 // Keyboard / scripted stand-in for the live audio detectors.
-// Keys: p P h f s S w W c + - 0 1-3 n b d t r (see key()).
+// Keys: p P h f s S w W c + - 0 1-4 n b d t r (see key()).
 class MockInput {
  public:
   void     reset();

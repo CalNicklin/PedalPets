@@ -30,6 +30,7 @@ class DollPet {
     if (scene_ && scene_->leafColours) leaves.scatter(rng_, leafCount, scene_->leafColours);
     composeDoll(char_->doll, choreo.pose(), parts);
     markCount = 0;
+    handsSeen_ = false;
   }
 
   // A music event (10 ms logic tick). The Mind may hold a sudden hit back for
@@ -54,10 +55,12 @@ class DollPet {
     int n = leaves.count();
     for (int i = 0; i < n; i++) {
       const Leaf& l = leaves.leaf(i);
-      sightings_[i] = {l.x, l.y, l.vx, l.vy, l.resting};
+      sightings_[i] = {l.x, l.y, l.vx, l.vy, l.resting, l.heldBy >= 0};
     }
     mind.tick(mood.mood(), body, sightings_, n, now);
     if (mind.takeTurn()) choreo.requestTurn(now);
+    if (mind.want() == Want::Approach) choreo.requestMove(ch.approachMove, now);
+    else if (mind.want() == Want::Reach) choreo.requestMove(ch.reachMove, now);
     choreo.setIntent(mind.intent());
     const Gaze& g = mind.gaze();
     choreo.setGaze(g.look, g.pitch, g.eyes, g.weight);
@@ -70,8 +73,11 @@ class DollPet {
     pivotOnCanvas(ch.doll, parts[0], &fx, &fy);
     PetMotion m = motion.update(channel(ch.doll.xChannel), channel(ch.doll.hopChannel), channel(ch.gustChannel),
                                 canvasX() + fx, canvasY() + fy);
-    leaves.step(rng_, m);
+    handCount_ = updateHands();
+    leaves.step(rng_, m, hands_, handCount_);
   }
+
+  const Hand* hands(int* count) const { *count = handCount_; return hands_; }   // this frame's hands
 
   int canvasX() const { return (SCREEN_W - char_->canvasW) / 2; }   // the doll canvas, bottom-centred
   int canvasY() const { return SCREEN_H - char_->canvasH; }
@@ -88,15 +94,43 @@ class DollPet {
  private:
   float channel(int c) const { return c >= 0 ? choreo.pose().ch[c] : 0.0f; }
 
+  // Where the hands are on screen this frame, how fast they move, whether they grip.
+  int updateHands() {
+    const Character& ch = *char_;
+    int n = 0;
+    for (int k = 0; k < 2; k++) {
+      int part = ch.handParts[k];
+      int x, y;
+      if (part < 0 || !tipOnCanvas(ch.doll, part, parts[part], &x, &y)) continue;
+      float sx = (float)(canvasX() + x), sy = (float)(canvasY() + y);
+      float g = channel(ch.gripChannels[k]);
+      bool grip = g >= 0.5f && g < 1.5f;
+      hands_[n] = {sx, sy, handsSeen_ ? sx - lastHand_[k][0] : 0, handsSeen_ ? sy - lastHand_[k][1] : 0, grip,
+                   grip && handsSeen_ && !lastGrip_[k]};
+      lastHand_[k][0] = sx;
+      lastHand_[k][1] = sy;
+      lastGrip_[k] = grip;
+      n++;
+    }
+    handsSeen_ = true;
+    return n;
+  }
+
   Body head() const {
     int hx = 0, hy = 0;
     if (char_->headPart >= 0) pivotOnCanvas(char_->doll, parts[char_->headPart], &hx, &hy);
     float face = char_->doll.faceChannel >= 0 ? channel(char_->doll.faceChannel) : 1.0f;
-    return {(float)(canvasX() + hx), (float)(canvasY() + hy), face, channel(char_->doll.hopChannel)};
+    return {(float)(canvasX() + hx), (float)(canvasY() + hy), face, channel(char_->doll.hopChannel),
+            char_->reachMove >= 0 ? (float)char_->reachPx : 0.0f};
   }
 
   Rng&             rng_;
   const Character* char_;
   const Scene*     scene_ = nullptr;
   Sighting         sightings_[MAX_LEAVES];
+  Hand             hands_[2];
+  float            lastHand_[2][2] = {};
+  bool             lastGrip_[2] = {};
+  bool             handsSeen_ = false;
+  int              handCount_ = 0;
 };

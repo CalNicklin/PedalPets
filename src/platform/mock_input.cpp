@@ -24,7 +24,7 @@ void MockInput::key(char c, uint32_t now) {
     case '+': base_ = fminf(1.0f, base_ + 0.1f); break;
     case '-': base_ = fmaxf(0.0f, base_ - 0.1f); break;
     case '0': base_ = 0; lift_ = 0; break;
-    case '1': case '2': case '3': runScript(c - '1', now); break;
+    case '1': case '2': case '3': case '4': runScript(c - '1', now); break;
     case 'd': hud_ = true; break;
     case 't': telemetry_ = true; break;
     case 'r': reset_ = true; break;

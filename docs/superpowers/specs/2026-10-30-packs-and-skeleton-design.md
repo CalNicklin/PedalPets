@@ -52,6 +52,24 @@ A cute-spooky little skeleton (big skull, small body), 3/4 view, ink style.
   his skull pops up when startled.
 - Verified like the jay: strips, motion checks, panel ghosting, the story.
 
+## Added after the first cut
+
+- **Lift**: any part can be lifted by a channel (children follow): the
+  skeleton's skull pops off when startled.
+- **Tips and hands**: parts can mark a tip (a hand). Hands sweep leaves; a
+  hand *closing* next to a leaf picks it up, holds it while it grips, and
+  throws it with the hand's speed when it opens.
+- **Approach and reach**: a character names the moves the Mind uses to walk
+  up to a landed leaf and reach for it, and how far ahead the reach gets; the
+  Mind investigates, approaches step by step, reaches once, then looks at
+  what's in its hand.
+- **Lying down**: past a 24° lean back, the body (and skull, jaw) roll back
+  across the picture plane rather than into the scene, so the skeleton sits,
+  lies back with his hands behind his head, and sleeps flat on his back.
+- **Solo moves**: postures (lying back, sitting, picking up) play alone.
+- **Graveyard** scene at dusk; demo script 4 ("quiet life") for the
+  in-between behaviour.
+
 ## Not now
 
-Holding objects, a second scene, a crowd.
+A crowd, memory of the player across sessions, an LLM director.

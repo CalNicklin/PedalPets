@@ -4,8 +4,9 @@
 #include "chars/jay/character.h"
 #include "chars/skeleton/character.h"
 #include "scenes/forest/scene.h"
+#include "scenes/graveyard/scene.h"
 
 static const Character* const CHARACTERS[] = {&jay_gen::CHARACTER, &skeleton_gen::CHARACTER};
 constexpr int CHARACTER_COUNT = 2;
-static const Scene* const SCENES[] = {&forest_scene::SCENE};
-constexpr int SCENE_COUNT = 1;
+static const Scene* const SCENES[] = {&forest_scene::SCENE, &graveyard_scene::SCENE};
+constexpr int SCENE_COUNT = 2;

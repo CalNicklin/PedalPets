@@ -83,6 +83,7 @@ float Mind::scoreYou(Mood mood) const {
 // How interesting a sighting is right now: a flying leaf (motion, nearness),
 // or the spot where one just landed (while curious). Salience 0 = not at all.
 Mind::Target Mind::scoreThing(Mood mood, const Body& body, const Sighting& s, int i, uint32_t now) const {
+  if (s.held) return {Focus::Leaf, i, s.x, s.y, 0.95f, true};  // in its hand: having a look
   float speed = sqrtf(s.vx * s.vx + s.vy * s.vy);
   float dist = sqrtf((s.x - body.headX) * (s.x - body.headX) + (s.y - body.headY) * (s.y - body.headY));
   float near = clampf(1 - dist / 90.0f, 0, 1) * 0.2f;
@@ -160,8 +161,10 @@ void Mind::aim(Mood mood, const Body& body, uint32_t now) {
 
 void Mind::decide(Mood mood, uint32_t now) {
   Intent want = Intent::None;
+  bool holding = focus_ == Focus::Leaf && target_.held;
   if (mood == Mood::Curious) {
-    if (focus_ == Focus::Leaf) want = Intent::Watch;
+    if (holding) want = Intent::Investigate;
+    else if (focus_ == Focus::Leaf) want = Intent::Watch;
     else if (focus_ == Focus::Spot) want = Intent::Investigate;
     else if (wantsYou_ >= cfg_.intentOn) want = Intent::WantsYou;
     else if (boredom_ >= cfg_.intentOn) want = Intent::Bored;
@@ -172,6 +175,22 @@ void Mind::decide(Mood mood, uint32_t now) {
   if (!urgent && now - intentSince_ < cfg_.minIntentMs) return;
   intent_ = want;
   intentSince_ = now;
+}
+
+// Investigating a landed leaf: walk up to it, then reach for it (once).
+void Mind::act(const Body& body, int count) {
+  want_ = Want::None;
+  if (intent_ != Intent::Investigate || focus_ != Focus::Spot || body.reachPx <= 0) return;
+  if (target_.thing < 0 || target_.thing >= count) return;
+  float forward = (body.headX - target_.x) * body.facing;     // + ahead of it
+  if (forward < -cfg_.behindMargin) return;                    // behind: it turns round first
+  if (forward > body.reachPx + cfg_.reachSlack) {
+    want_ = Want::Approach;
+    return;
+  }
+  want_ = Want::Reach;
+  landedAt_[target_.thing] = 0;                                // done with this spot
+  interest_[target_.thing] = 0.3f;
 }
 
 void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, uint32_t now) {
@@ -218,11 +237,14 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
 
   aim(mood, body, now);
   decide(mood, now);
+  act(body, count);
 
   if (noticing_) return;                           // keep "whoa!" until it reacts
   switch (intent_) {
     case Intent::Watch:       think("ooh a leaf - watching it"); break;
-    case Intent::Investigate: think("where did it land? going to look"); break;
+    case Intent::Investigate:
+      think(target_.held ? "got a leaf - having a look" : "where did it land? going to look");
+      break;
     case Intent::WantsYou:    think("hey... play something"); break;
     case Intent::Bored:       think("bored - fidgeting"); break;
     case Intent::None:

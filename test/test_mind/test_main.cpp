@@ -9,7 +9,7 @@ void tearDown() {}
 static Rng rng(1);
 static Mind* mind = nullptr;
 static uint32_t t;
-static Body body = {80, 70, 1, 0};   // head at screen (80, 70), beak to screen-left
+static Body body = {80, 70, 1, 0, 10};   // head at screen (80, 70), facing screen-left, reaches 10 px ahead
 
 static void fresh() {
   delete mind;
@@ -68,7 +68,7 @@ void test_stopping_playing_makes_it_want_you() {
 void test_a_flying_leaf_is_watched_and_tracked() {
   fresh();
   run(Mood::Curious, 10);
-  Sighting leaf = {60, 100, -1.5f, 0.5f, false};            // in front, below the head
+  Sighting leaf = {60, 100, -1.5f, 0.5f, false, false};            // in front, below the head
   run(Mood::Curious, 2, &leaf, 1);
   TEST_ASSERT_EQUAL(Focus::Leaf, mind->focus());
   TEST_ASSERT_EQUAL(Intent::Watch, mind->intent());
@@ -78,7 +78,7 @@ void test_a_flying_leaf_is_watched_and_tracked() {
 
 void test_a_leaf_landing_gets_investigated() {
   fresh();
-  Sighting leaf = {60, 100, -1.5f, 0.5f, false};
+  Sighting leaf = {60, 100, -1.5f, 0.5f, false, false};
   run(Mood::Curious, 20, &leaf, 1);
   leaf.vx = leaf.vy = 0;
   leaf.resting = true;
@@ -89,7 +89,7 @@ void test_a_leaf_landing_gets_investigated() {
 
 void test_something_behind_makes_it_turn_round() {
   fresh();
-  Sighting leaf = {120, 90, 1.0f, 0.3f, false};             // behind (beak faces left)
+  Sighting leaf = {120, 90, 1.0f, 0.3f, false, false};             // behind (beak faces left)
   run(Mood::Curious, 3, &leaf, 1);
   TEST_ASSERT_FALSE(mind->takeTurn());
   run(Mood::Curious, 20, &leaf, 1);
@@ -99,7 +99,7 @@ void test_something_behind_makes_it_turn_round() {
 
 void test_asleep_has_no_intent_or_gaze() {
   fresh();
-  Sighting leaf = {60, 100, -1.5f, 0.5f, false};
+  Sighting leaf = {60, 100, -1.5f, 0.5f, false, false};
   run(Mood::Asleep, 30, &leaf, 1);
   TEST_ASSERT_EQUAL(Intent::None, mind->intent());
   TEST_ASSERT_EQUAL_FLOAT(0, mind->gaze().weight);
@@ -113,6 +113,31 @@ void test_playing_hard_it_performs_to_you() {
   TEST_ASSERT_TRUE(mind->gaze().weight < 1);                // the dance still shows
 }
 
+void test_it_walks_up_to_a_landed_leaf_then_reaches_for_it() {
+  fresh();
+  Sighting leaf = {40, 120, -1.5f, 0.5f, false, false};   // 40 px ahead of the head
+  run(Mood::Curious, 10, &leaf, 1);
+  leaf.vx = leaf.vy = 0;
+  leaf.resting = true;
+  run(Mood::Curious, 2, &leaf, 1);
+  TEST_ASSERT_EQUAL(Intent::Investigate, mind->intent());
+  TEST_ASSERT_EQUAL(Want::Approach, mind->want());
+  leaf.x = 69;                                            // now within reach (11 px ahead)
+  run(Mood::Curious, 1, &leaf, 1);
+  TEST_ASSERT_EQUAL(Want::Reach, mind->want());
+  run(Mood::Curious, 1, &leaf, 1);
+  TEST_ASSERT_EQUAL(Want::None, mind->want());           // reaches once
+}
+
+void test_a_leaf_in_hand_holds_its_attention() {
+  fresh();
+  Sighting leaf = {70, 60, 0, 0, false, true};            // held up by the face
+  run(Mood::Curious, 3, &leaf, 1);
+  TEST_ASSERT_EQUAL(Focus::Leaf, mind->focus());
+  TEST_ASSERT_TRUE(mind->intent() != Intent::Watch);      // not "watching" (that would use its hands)
+  TEST_ASSERT_NOT_NULL(strstr(mind->thought(), "leaf"));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_loud_hit_after_quiet_gets_a_double_take);
@@ -124,5 +149,7 @@ int main() {
   RUN_TEST(test_something_behind_makes_it_turn_round);
   RUN_TEST(test_asleep_has_no_intent_or_gaze);
   RUN_TEST(test_playing_hard_it_performs_to_you);
+  RUN_TEST(test_it_walks_up_to_a_landed_leaf_then_reaches_for_it);
+  RUN_TEST(test_a_leaf_in_hand_holds_its_attention);
   return UNITY_END();
 }

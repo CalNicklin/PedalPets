@@ -102,6 +102,15 @@ int main(int argc, char** argv) {
     if (getenv("PEDALPETS_CHANNELS")) {   // debug: raw channel values after the parts
       for (int c = 0; c < character->doll.channelCount; c++)
         printf(",%s=%.2f", character->channelNames[c], pet.choreo.pose().ch[c]);
+      int nh;
+      const Hand* hands = pet.hands(&nh);
+      for (int k = 0; k < nh; k++) printf(",hand%dx=%.1f,hand%dy=%.1f,grip%d=%d", k, hands[k].x, k, hands[k].y, k, hands[k].grip);
+      int held = 0;
+      for (int i = 0; i < pet.leaves.count(); i++) held += pet.leaves.leaf(i).heldBy >= 0;
+      printf(",held=%d", held);
+      int hx, hy;
+      pivotOnCanvas(character->doll, pet.parts[character->headPart], &hx, &hy);
+      printf(",headx=%d", pet.canvasX() + hx);
     }
     printf("\n");
   }

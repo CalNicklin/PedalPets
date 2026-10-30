@@ -87,6 +87,42 @@ void test_motion_sensor() {
   TEST_ASSERT_TRUE(m.gust > 0.5f);
 }
 
+void test_a_moving_hand_sweeps_a_leaf() {
+  oneLeaf(50);
+  Hand h = {52, 120, -1.5f, 0.2f, false, false};               // sweeping left through it
+  field.step(rng, still(100), &h, 1);
+  TEST_ASSERT_FALSE(field.leaf(0).resting);
+  TEST_ASSERT_TRUE(field.leaf(0).vx < -0.5f);
+}
+
+void test_a_closing_fist_picks_up_a_leaf_and_throws_it() {
+  oneLeaf(50);
+  Hand h = {51, 121, 0, 0, true, true};                 // closing right by it
+  field.step(rng, still(100), &h, 1);
+  TEST_ASSERT_EQUAL_INT(0, field.leaf(0).heldBy);
+  h = {60, 90, 0, -1, true, false};                     // lifted to the face
+  field.step(rng, still(100), &h, 1);
+  TEST_ASSERT_EQUAL_FLOAT(60, field.leaf(0).x);
+  TEST_ASSERT_EQUAL_FLOAT(90, field.leaf(0).y);
+  h = {64, 84, 2.5f, -2.0f, false, false};              // hand opens mid-swing
+  field.step(rng, still(100), &h, 1);
+  TEST_ASSERT_EQUAL_INT(-1, field.leaf(0).heldBy);
+  TEST_ASSERT_TRUE(field.leaf(0).vx > 1.5f);
+  for (int i = 0; i < 400; i++) field.step(rng, still(100), &h, 0);
+  TEST_ASSERT_TRUE(field.leaf(0).resting);              // and it comes down again
+}
+
+void test_only_a_closing_hand_grabs() {
+  oneLeaf(50);
+  Hand h = {51, 121, 0, 0, false, false};
+  field.step(rng, still(100), &h, 1);
+  TEST_ASSERT_EQUAL_INT(-1, field.leaf(0).heldBy);
+  h = {51, 121, 0, 0, true, false};                     // already a fist (dancing): passes by
+  field.step(rng, still(100), &h, 1);
+  TEST_ASSERT_EQUAL_INT(-1, field.leaf(0).heldBy);
+  TEST_ASSERT_TRUE(field.leaf(0).resting);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_resting_leaf_stays_put);
@@ -96,5 +132,8 @@ int main(int, char**) {
   RUN_TEST(test_wing_gust_blows_leaves_away_from_the_pet);
   RUN_TEST(test_leaves_stay_on_screen);
   RUN_TEST(test_motion_sensor);
+  RUN_TEST(test_a_moving_hand_sweeps_a_leaf);
+  RUN_TEST(test_a_closing_fist_picks_up_a_leaf_and_throws_it);
+  RUN_TEST(test_only_a_closing_hand_grabs);
   return UNITY_END();
 }

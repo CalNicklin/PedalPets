@@ -30,6 +30,8 @@ struct DollPart {
   DollAxis axes[DOLL_MAX_AXES];
   uint16_t firstImage;    // images row-major over axes (first axis slowest)
   uint16_t imageCount;
+  uint32_t liftMask;      // lifted (pixels, up) by the sum of these channels; children follow (0 = none)
+  bool     hasTip;        // tables.tips holds where this part's tip (a hand) is in each image
 };
 
 struct DollTables {
@@ -42,6 +44,7 @@ struct DollTables {
   int8_t            hopChannel;                    // lifts the ground part (pixels)
   int8_t            xChannel;                      // moves the whole doll across the stage (pixels)
   int8_t            faceChannel;                   // < 0 mirrors the doll about its feet
+  const DollAnchor* tips;                          // per image (parts with hasTip), canvas quarter px
 };
 
 struct DollPose { float ch[DOLL_MAX_CHANNELS]; };
@@ -55,3 +58,5 @@ void composeDoll(const DollTables& t, const DollPose& p, DollPlacement* out);
 
 // Canvas position of a placed part's pivot (e.g. the feet for the ground part).
 void pivotOnCanvas(const DollTables& t, const DollPlacement& p, int* x, int* y);
+// Canvas position of a placed part's tip (a hand); false if the part has none.
+bool tipOnCanvas(const DollTables& t, int part, const DollPlacement& p, int* x, int* y);

@@ -17,12 +17,13 @@ def new_registry():
     moves = {}
 
     def move(name, frames, loop=None, loop_until=None, loop_max=0, freeze_ms=0, flip_at=None, twos=False,
-             **channels):
+             solo=False, **channels):
         """x keys are travel forward and may end away from 0; flip_at turns the
         pet round after that frame (hide it in the air); twos holds each pose
-        two frames (fast moves: the TN panel needs ~60 ms to settle)."""
+        two frames (fast moves: the TN panel needs ~60 ms to settle); solo is a
+        posture (lying back, sitting) no other idle move starts during."""
         moves[name] = {"frames": frames, "loop": loop, "loop_until": loop_until, "loop_max": loop_max,
-                       "freeze_ms": freeze_ms, "flip_at": flip_at, "twos": twos, "channels": channels}
+                       "freeze_ms": freeze_ms, "flip_at": flip_at, "twos": twos, "solo": solo, "channels": channels}
     return moves, move
 
 

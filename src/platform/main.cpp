@@ -68,7 +68,7 @@ void setup() {
   rng = Rng(esp_random());
   renderer.begin();
   resetAll(millis());
-  Serial.println("PedalPets ready. Keys: p P h f s S w W c + - 0 | 1-3 scripts | n character | b scene | "
+  Serial.println("PedalPets ready. Keys: p P h f s S w W c + - 0 | 1-4 scripts | n character | b scene | "
                  "d HUD | t telemetry | r reset");
 }
 

@@ -20,9 +20,9 @@ def rng(lo, hi, step):
     return [lo + i * step for i in range(int(round((hi - lo) / step)) + 1)]
 
 
-BENDS = [-1] + rng(0, 2, 0.25)            # -1 tucked (airborne), 0 stand .. 2 low
+BENDS = [-1] + rng(0, 3, 0.25)            # -1 tucked (airborne), 0 stand .. 2 low, 3 lying
 STRIDES = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1]
-LEANS = rng(-24, 24, 3)
+LEANS = rng(-96, 24, 3)                   # past -24 the body rolls back across the picture
 SHAPES = {-1: (0.94, 1.0, 1.07), -0.5: (0.97, 1.0, 1.035), 0: (1.0, 1.0, 1.0), 0.5: (1.03, 1.0, 0.965),
           1: (1.06, 1.0, 0.93), 1.5: (1.08, 1.0, 0.9), 2: (1.1, 1.0, 0.87)}
 EYES = {-1: ("wide", (1.45, 1, 1.45)), 0: ("open", (1, 1, 1)), 1: ("half", (1, 1, 0.45)),
@@ -41,19 +41,28 @@ def legs_pose(bend, stride):
     return sk.legs_pose(bend, stride)
 
 
+def roll_and(lean):
+    """The body/head tilt split into a 3/4 lean and a roll across the picture (skeleton.tilt)."""
+    x, roll = sk.tilt(lean)
+    return x, {"roll": {"r": (0, -roll, 0)}}
+
+
 def body_pose(lean, shape):
-    return {"hips": {"r": (lean, 0, 0), "s": SHAPES[shape]}}
+    x, roll = roll_and(lean)
+    return sk.merge(roll, {"hips": {"r": (x, 0, 0), "s": SHAPES[shape]}})
 
 
 def skull_pose(pitch, lk, eyes):
     ry, rz = look(lk)
     s = EYES[eyes][1]
-    return {"head": {"r": (pitch, ry, rz)}, "eyeR": {"s": s}, "eyeL": {"s": s}}
+    x, roll = roll_and(pitch)
+    return sk.merge(roll, {"head": {"r": (x, ry, rz)}, "eyeR": {"s": s}, "eyeL": {"s": s}})
 
 
 def jaw_pose(angle, lk):
     ry, rz = look(lk)
-    return {"head": {"r": (0, ry, rz)}, "jaw": {"r": (angle, 0, 0)}}
+    x, roll = roll_and(angle)
+    return sk.merge(roll, {"head": {"r": (0, ry, rz)}, "jaw": {"r": (x, 0, 0)}})
 
 
 def upper_pose(side):
@@ -69,7 +78,7 @@ def fore_pose(side):
 
 
 CHANNELS = ["hop", "legs", "lean", "squash", "pitch", "look", "eyes", "jaw",
-            "armR", "elbowR", "handR", "armL", "elbowL", "handL", "x", "face", "stride"]
+            "armR", "elbowR", "handR", "armL", "elbowL", "handL", "x", "face", "stride", "skull"]   # skull: pops up (px)
 
 
 def axis(name, values, sources, labels=None):
@@ -86,6 +95,7 @@ def arm_parts(side):
          "axes": [axis("angle", UPPER_ANGLES, [f"arm{side}"])], "pose": upper_pose(side)},
         {"name": f"fore{side}", "parent": f"upper{side}",
          "joints": [f"elbow{side}", f"open{side}", f"fist{side}", f"point{side}"], "pivot": f"elbow{side}",
+         "tip": f"tip{side}",
          "axes": [axis("angle", FORE_ANGLES, [f"arm{side}", f"elbow{side}"]),
                   axis("hand", HANDS, [f"hand{side}"], ["open", "fist", "point"])],
          "pose": fore_pose(side)},
@@ -99,10 +109,11 @@ PARTS = [
      "anchors": {"skull": "head", "upperR": "shoulderR", "upperL": "shoulderL"},
      "axes": [axis("lean", LEANS, ["lean"]), axis("shape", list(SHAPES), ["squash"])], "pose": body_pose},
     {"name": "skull", "parent": "body", "joints": ["head", "eyeR", "eyeL"], "pivot": "head", "anchors": {"jaw": "jaw"},
-     "axes": [axis("pitch", rng(-36, 64, 4), ["lean", "pitch"]), axis("look", LOOKS, ["look"]),
+     "lift": ["skull"],
+     "axes": [axis("pitch", rng(-104, 64, 4), ["lean", "pitch"]), axis("look", LOOKS, ["look"]),
               axis("eyes", list(EYES), ["eyes"], [v[0] for v in EYES.values()])], "pose": skull_pose},
     {"name": "jaw", "parent": "skull", "joints": ["jaw"], "pivot": "jaw",
-     "axes": [axis("angle", rng(-8, 48, 4), ["lean", "pitch", "jaw"]), axis("look", LOOKS, ["look"])],
+     "axes": [axis("angle", rng(-104, 48, 4), ["lean", "pitch", "jaw"]), axis("look", LOOKS, ["look"])],
      "pose": jaw_pose},
     *arm_parts("R"),
     *arm_parts("L"),

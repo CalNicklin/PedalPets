@@ -236,8 +236,9 @@ INTENTS = {
     "Investigate": {"vocab": [("hop_fwd", 4), ("peck", 3), ("hop_small", 1)], "gap": (300, 800)},
 }
 TURN_MOVE = "turn_round"
-# Roles the engine needs: the head (gaze, marks) and the channel that gusts leaves.
-ROLES = {"head": "head", "gust": "flapL"}
+# Roles the engine needs: the head (gaze, marks), the channel that gusts leaves,
+# and the moves the Mind uses to go up to a leaf and have a go at it.
+ROLES = {"head": "head", "gust": "flapL", "approach": "hop_fwd", "reach": "peck", "reach_px": 6}
 
 REACTIONS = {
     "BigHit": ["startle"], "Flurry": ["flutter"], "Sustain": ["sing"], "Swell": ["launch"], "Cut": ["point"],

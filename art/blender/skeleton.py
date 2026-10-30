@@ -26,12 +26,14 @@ lib.COLOURS.update({
 })
 
 TURN_DEG = -32
+CANVAS_W = 144             # wider than the jay's: room to lie down
+lib.set_canvas(CANVAS_W)
 HIP = 0.50                 # hip height standing
 THIGH, SHIN = 0.24, 0.24
 UPPER, FORE = 0.28, 0.25   # arm bones (long enough to reach past the skull)
 SHOULDER_Z = 0.97
 
-lib.KEYED = ("root", "legs", "hipR", "hipL", "kneeR", "kneeL", "hips", "neck", "head", "jaw",
+lib.KEYED = ("root", "legs", "hipR", "hipL", "kneeR", "kneeL", "roll", "hips", "neck", "head", "jaw",
              "eyeR", "eyeL", "shoulderR", "shoulderL", "elbowR", "elbowL",
              "openR", "openL", "fistR", "fistL", "pointR", "pointL")
 
@@ -79,8 +81,11 @@ def build_character():
         bone(f"shin{name}", mat, knee, (0, 0, 0), SHIN, r=0.03)
         blob(f"foot{name}", mat, knee, (0, -0.05, -SHIN - 0.02), (0.06, 0.1, 0.035))
 
-    # Body: pelvis, spine, ribcage (gaps are dark slits), a bow tie.
-    hips = J["hips"] = joint("hips", root, (0, 0, HIP))
+    # Body: pelvis, spine, ribcage (gaps are dark slits), a bow tie. `roll`
+    # (at the hip) tips the whole upper body across the picture, for lying down.
+    roll = J["roll"] = screen_joint("roll", root, (0, 0, HIP))
+    hips = J["hips"] = joint("hips", roll, (0, 0, 0))
+    hips.rotation_euler = (0, 0, math.radians(TURN_DEG))     # back to the 3/4 view
     blob("pelvis", "bone", hips, (0, 0, 0.04), (0.15, 0.09, 0.07))
     blob("sacrum", "shade", hips, (0, 0.03, 0.0), (0.05, 0.05, 0.06))
     for i, z in enumerate((0.13, 0.19, 0.25)):
@@ -125,6 +130,7 @@ def build_character():
         wrist = joint(f"wrist{name}", el, (0, 0, -FORE - 0.01))
         J[f"wrist{name}"] = wrist
         build_hand(side, name, wrist)
+        J[f"tip{name}"] = joint(f"tip{name}", wrist, (0, 0, -0.05))   # where the hand holds things
 
 
 # --- poses -------------------------------------------------------------------
@@ -142,20 +148,50 @@ def arm(name, angle, elbow=0, shape="open"):
     return merge({f"shoulder{name}": {"r": (0, angle, 0)}, f"elbow{name}": {"r": (0, elbow, 0)}}, hand(name, shape))
 
 
+GROUND_HIP = 0.2          # hip height lying on the ground
+
+
 def legs_pose(bend, stride=0):
-    """bend 0 stand .. 2 low (knees forward, hips drop, feet stay put); -1 tucked (airborne)."""
-    if bend < 0:
-        thigh, knee, drop = 55, -95, 0.0
-    else:
-        thigh = 32 * bend
-        knee = -2 * thigh
-        h = (THIGH + SHIN) * math.cos(math.radians(thigh))
-        drop = h - (THIGH + SHIN)
+    """bend 0 stand .. 2 low (knees forward, hips drop, feet stay put); 2..3 sits
+    down onto the ground and lies back (one knee up); -1 tucked (airborne)."""
     a = 26 * stride
+    if bend < 0:
+        tr = tl = 55
+        kr = kl = -95
+        drop = 0.0
+    elif bend <= 2:
+        tr = tl = 32 * bend
+        kr = kl = -2 * tr
+        drop = (THIGH + SHIN) * math.cos(math.radians(tr)) - (THIGH + SHIN)
+    else:                                     # sit, then lie: lerp from the low crouch
+        u = bend - 2
+        c_t, c_k = 64, -128
+        c_drop = (THIGH + SHIN) * math.cos(math.radians(c_t)) - (THIGH + SHIN)
+        tr, kr = c_t + (86 - c_t) * u, c_k + (-8 - c_k) * u        # near leg stretched out
+        tl, kl = c_t + (52 - c_t) * u, c_k + (-100 - c_k) * u      # far knee up
+        drop = c_drop + ((GROUND_HIP - HIP) - c_drop) * u
     return {"legs": {"l": (0, 0, drop)},
-            "hipR": {"r": (-thigh + a, 0, 0)}, "kneeR": {"r": (-knee, 0, 0)},
-            "hipL": {"r": (-thigh - a, 0, 0)}, "kneeL": {"r": (-knee, 0, 0)},
-            "hips": {"l": (0, 0, drop)}}
+            "hipR": {"r": (-tr + a, 0, 0)}, "kneeR": {"r": (-kr, 0, 0)},
+            "hipL": {"r": (-tl - a, 0, 0)}, "kneeL": {"r": (-kl, 0, 0)},
+            "roll": {"l": (0, 0, drop)}}
+
+
+def tilt(v):
+    """A body/head tilt v (degrees, + forward): up to 24 back it leans in the
+    3/4 view (rotation about the body's own axis); further back it blends into
+    a roll across the picture, so lying down (v ~ -90) lies flat on screen
+    rather than into the scene. Returns (lean about X, roll in the picture)."""
+    if v >= -24:
+        return v, 0.0
+    u = min(1.0, (-24 - v) / 72)
+    lean = -24 * (1 - u)
+    return lean, v - lean
+
+
+def body_tilt(v):
+    lean, roll = tilt(v)
+    # + about the camera-facing Y tips the top toward screen-right: backward, as he faces.
+    return {"roll": {"r": (0, -roll, 0)}, "hips": {"r": (lean, 0, 0)}}
 
 
 REST = merge(arm("R", 8), arm("L", 8), legs_pose(0))
@@ -166,15 +202,13 @@ def show():
     (screen-left, the way he faces), so the near arm reaches up-and-out with -."""
     lib.ACTIONS.clear()
     action("rest", 1, [(0, REST)])
-    action("wave", 1, [(0, merge(REST, arm("L", -150, -30, "open"), P(head={"r": (-6, 0, -8)})))])
-    action("point", 1, [(0, merge(REST, arm("L", 95, 0, "point"), P(head={"r": (0, 0, 10)})))])
-    action("guitar", 1, [(0, merge(REST, arm("R", 70, 40, "fist"), arm("L", 25, 80, "fist"),
-                                   legs_pose(0.5), P(head={"r": (16, 0, 0)}, jaw={"r": (16, 0, 0)})))])
-    action("cheer", 1, [(0, merge(REST, arm("R", 150, 10, "fist"), arm("L", -150, -10, "fist"),
-                                  P(jaw={"r": (24, 0, 0)}, head={"r": (-14, 0, 0)})))])
-    action("crouch", 1, [(0, merge(REST, legs_pose(1.5), arm("R", 30, 40), arm("L", 30, 40)))])
-    action("walk", 1, [(0, merge(REST, legs_pose(0, 1), arm("R", -25), arm("L", 25)))])
-    action("scratch", 1, [(0, merge(REST, arm("L", -170, -150, "open"), P(head={"r": (8, 0, 12)})))])
+    action("sit", 1, [(0, merge(REST, legs_pose(2.5), body_tilt(-40), arm("R", 20, 30), arm("L", -10)))])
+    action("lie", 1, [(0, merge(REST, legs_pose(3), body_tilt(-90), arm("R", -100, -120), arm("L", -130, -110)))])
+    action("lie_look", 1, [(0, merge(REST, legs_pose(3), body_tilt(-90), P(head={"r": (24, 0, 20)}),
+                                     arm("R", 30, 20), arm("L", -30)))])
+    action("pickup", 1, [(0, merge(REST, legs_pose(1), P(hips={"r": (22, 0, 0)}, head={"r": (30, 0, 0)}),
+                                   arm("R", 25, 15, "fist")))])
+    action("lookat", 1, [(0, merge(REST, arm("R", 115, 115, "fist"), P(head={"r": (-6, 0, 0)})))])
 
 
 def secondary(act, f):

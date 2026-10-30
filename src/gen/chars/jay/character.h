@@ -8,6 +8,8 @@
 namespace jay_gen {
 
 static const Character CHARACTER = {"jay", CANVAS_W, CANVAS_H, DOLL, CHOREO, MOVE_NAMES, CHANNEL_NAMES,
-                                     2, 10, PALETTE, PIXELS, MARK_PIXELS};
+    2, 10, {-1, -1}, {-1, -1},
+    9, 17, 6,
+    PALETTE, PIXELS, MARK_PIXELS};
 
 }  // namespace jay_gen

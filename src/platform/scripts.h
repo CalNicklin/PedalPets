@@ -57,10 +57,18 @@ static const ScriptEntry SCRIPT_HOLDS[] = {
   {12000, 'w', 1, 0 },  // no peak: crouch caps at 5 s, then leaps anyway
 };
 
+// 4: a quiet life — woken, then left alone (a light note now and then keeps it
+// awake): watch it wander, get bored, play with the leaves, lie about.
+static const ScriptEntry SCRIPT_QUIET[] = {
+  {    0, 'p', 1,     0 },
+  {20000, 'p', 5, 20000 },
+};
+
 #define SCRIPT_LEN(a) (uint8_t)(sizeof(a) / sizeof(a[0]))
 static const Script SCRIPTS[] = {
   {SCRIPT_SET,      SCRIPT_LEN(SCRIPT_SET)},
   {SCRIPT_PRIORITY, SCRIPT_LEN(SCRIPT_PRIORITY)},
   {SCRIPT_HOLDS,    SCRIPT_LEN(SCRIPT_HOLDS)},
+  {SCRIPT_QUIET,    SCRIPT_LEN(SCRIPT_QUIET)},
 };
-constexpr int SCRIPT_COUNT = 3;
+constexpr int SCRIPT_COUNT = sizeof(SCRIPTS) / sizeof(SCRIPTS[0]);

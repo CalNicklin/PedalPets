@@ -47,6 +47,12 @@ void composeDoll(const DollTables& t, const DollPose& p, DollPlacement* out) {
       ax4 = an.x4 + dx4[part.parent];
       ay4 = an.y4 + dy4[part.parent];
     }
+    if (part.liftMask) {                           // e.g. a skull popping off its neck
+      float lift = 0;
+      for (int c = 0; c < t.channelCount; c++)
+        if (part.liftMask & (1u << c)) lift += p.ch[c];
+      ay4 -= (int32_t)lroundf(lift * 4);
+    }
     dx4[i] = ax4 - im.pivotX4;
     dy4[i] = ay4 - im.pivotY4;
     out[i] = {img, (int16_t)(im.x + roundQuarter(dx4[i])), (int16_t)(im.y + roundQuarter(dy4[i])), false};
@@ -68,4 +74,14 @@ void pivotOnCanvas(const DollTables& t, const DollPlacement& p, int* x, int* y) 
   int px = roundQuarter(im.pivotX4) - im.x;   // pivot inside the crop
   *x = p.x + (p.flip ? im.w - px : px);
   *y = p.y + roundQuarter(im.pivotY4) - im.y;
+}
+
+bool tipOnCanvas(const DollTables& t, int part, const DollPlacement& p, int* x, int* y) {
+  if (!t.tips || !t.parts[part].hasTip) return false;
+  const DollImage& im = t.images[p.image];
+  const DollAnchor& tip = t.tips[p.image];
+  int tx = roundQuarter(tip.x4) - im.x;          // tip inside the crop
+  *x = p.x + (p.flip ? im.w - tx : tx);
+  *y = p.y + roundQuarter(tip.y4) - im.y;
+  return true;
 }

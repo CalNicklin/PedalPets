@@ -56,6 +56,12 @@ bool LeafField::edgeOn(int i) const {
   return !leaves_[i].resting && fabsf(sinf(leaves_[i].angle * 2)) > 0.75f;
 }
 
+bool LeafField::holding(int hand) const {
+  for (int i = 0; i < count_; i++)
+    if (leaves_[i].heldBy == hand) return true;
+  return false;
+}
+
 void LeafField::kick(Rng& rng, Leaf& l, float vx, float vy) {
   l.vx = vx + frand(rng, -0.3f, 0.3f);
   l.vy = vy * frand(rng, 0.8f, 1.2f);
@@ -63,10 +69,38 @@ void LeafField::kick(Rng& rng, Leaf& l, float vx, float vy) {
   l.resting = false;
 }
 
-void LeafField::step(Rng& rng, const PetMotion& m) {
+void LeafField::step(Rng& rng, const PetMotion& m, const Hand* hands, int handCount) {
   for (int i = 0; i < count_; i++) {
     Leaf& l = leaves_[i];
     float ry = restY(i);
+
+    if (l.heldBy >= 0) {                                      // in a hand: follows it, or is thrown
+      if (l.heldBy < handCount && hands[l.heldBy].grip) {
+        const Hand& h = hands[l.heldBy];
+        l.x = h.x;
+        l.y = h.y;
+        l.angle += 0.05f;
+        continue;
+      }
+      const Hand* h = l.heldBy < handCount ? &hands[l.heldBy] : nullptr;
+      l.heldBy = -1;
+      kick(rng, l, h ? h->vx * 1.2f : 0, h ? fminf(h->vy * 1.2f, -0.6f) : -0.6f);
+    }
+    for (int k = 0; k < handCount; k++) {                     // hands: grab, or sweep
+      const Hand& h = hands[k];
+      float hx = l.x - h.x, hy = l.y - h.y;
+      float d = sqrtf(hx * hx + hy * hy);
+      if (h.closing && fabsf(hx) < cfg_.grabReach && fabsf(hy) < cfg_.grabDepth && !holding(k)) {
+        l.heldBy = (int8_t)k;
+        l.resting = false;
+        l.vx = l.vy = 0;
+        break;
+      }
+      float speed = sqrtf(h.vx * h.vx + h.vy * h.vy);
+      if (!h.grip && d < cfg_.handReach && speed >= cfg_.minSweepSpeed)
+        kick(rng, l, h.vx * 0.9f, fminf(h.vy * 0.6f, -0.4f));
+    }
+    if (l.heldBy >= 0) continue;
     float dx = l.x - m.feetX;
     float dir = dx >= 0 ? 1.0f : -1.0f;
 

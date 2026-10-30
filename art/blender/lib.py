@@ -36,6 +36,13 @@ J = {}                         # joints by name
 
 # --- scene -------------------------------------------------------------------
 
+def set_canvas(w, h=None):
+    """A character's canvas (1x pixels); wider ones leave room to lie down. Call before rendering."""
+    global CANVAS_W, CANVAS_H
+    CANVAS_W = w
+    CANVAS_H = h or CANVAS_H
+
+
 def reset_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     s = bpy.context.scene
@@ -53,7 +60,7 @@ def reset_scene():
 
     cam_data = bpy.data.cameras.new("cam")
     cam_data.type = "ORTHO"
-    cam_data.ortho_scale = VIEW_H
+    cam_data.ortho_scale = VIEW_H * max(1.0, CANVAS_W / CANVAS_H)   # the scale spans the wider side
     cam = bpy.data.objects.new("cam", cam_data)
     s.collection.objects.link(cam)
     # Feet (z=0) land on the canvas baseline.
@@ -299,12 +306,18 @@ def render_parts(build, turn_deg, parts):
             apply(part["pose"](*values))
             fname = f"{part['name']}_{i:03d}.png"
             render(os.path.join(raw, fname))
-            images.append({"file": fname, "values": list(values),
-                           "pivot": project(part["pivot"]),
-                           "anchors": {c: project(j) for c, j in part.get("anchors", {}).items()}})
-        out.append({"name": part["name"], "parent": part.get("parent"),
-                    "axes": [{k: v for k, v in ax.items()} for ax in part["axes"]],
-                    "images": images})
+            img = {"file": fname, "values": list(values), "pivot": project(part["pivot"]),
+                   "anchors": {c: project(j) for c, j in part.get("anchors", {}).items()}}
+            if part.get("tip"):
+                img["tip"] = project(part["tip"])
+            images.append(img)
+        entry = {"name": part["name"], "parent": part.get("parent"),
+                 "axes": [{k: v for k, v in ax.items()} for ax in part["axes"]], "images": images}
+        if part.get("lift"):
+            entry["lift"] = part["lift"]
+        if part.get("tip"):
+            entry["tip"] = True
+        out.append(entry)
         print(f"rendered {part['name']}: {len(images)} images")
     palette = [{"name": n, "render": [srgb(c) for c in rgb], "out": out_hex}
                for n, (rgb, out_hex) in COLOURS.items()]

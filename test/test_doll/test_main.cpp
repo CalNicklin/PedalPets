@@ -110,6 +110,41 @@ void test_facing_mirrors_about_the_feet() {
   TEST_ASSERT_EQUAL_INT16(55, out[1].y);     // vertical unchanged
 }
 
+// Lift and tips: the arm (part 1) lifted by channel 2 alone, with a tip per image.
+static const DollAnchor TIPS[] = {{0, 0}, {0, 0}, {10 * 4, 20 * 4}, {11 * 4, 20 * 4}, {12 * 4, 20 * 4}};
+static const DollPart LIFT_PARTS[] = {
+  {-1, 0, 1, {{2, 0, 0b0001}, {0, 0, 0}, {0, 0, 0}}, 0, 2},
+  {0, 0, 1, {{3, 2, 0b0010}, {0, 0, 0}, {0, 0, 0}}, 2, 3, 0b0100, true},
+};
+static const DollTables LIFT_TABLES = {LIFT_PARTS, 2, DRAW_ORDER, IMAGES, ANCHORS, AXIS_VALUES, 6, 3, 4, 5, TIPS};
+
+void test_lift_raises_a_part_and_its_tip() {
+  DollPlacement a[2], b[2];
+  composeDoll(LIFT_TABLES, pose(0, 0, 0, 0), a);
+  composeDoll(LIFT_TABLES, pose(0, 0, 3, 0), b);   // lifted 3 px
+  TEST_ASSERT_EQUAL_INT16(a[1].x, b[1].x);
+  TEST_ASSERT_EQUAL_INT16(a[1].y - 3, b[1].y);
+  TEST_ASSERT_EQUAL_INT16(a[0].y, b[0].y);         // the parent stays
+  int ax, ay, bx, by;
+  TEST_ASSERT_TRUE(tipOnCanvas(LIFT_TABLES, 1, a[1], &ax, &ay));
+  TEST_ASSERT_TRUE(tipOnCanvas(LIFT_TABLES, 1, b[1], &bx, &by));
+  TEST_ASSERT_EQUAL_INT(ax, bx);
+  TEST_ASSERT_EQUAL_INT(ay - 3, by);
+  TEST_ASSERT_FALSE(tipOnCanvas(LIFT_TABLES, 0, a[0], &ax, &ay));   // no tip on the base
+}
+
+void test_tip_mirrors_with_the_doll() {
+  DollPlacement r[2], l[2];
+  composeDoll(LIFT_TABLES, pose(0, 0, 0, 0, 0, 1), r);
+  composeDoll(LIFT_TABLES, pose(0, 0, 0, 0, 0, -1), l);
+  int rx, ry, lx, ly, gx, gy;
+  tipOnCanvas(LIFT_TABLES, 1, r[1], &rx, &ry);
+  tipOnCanvas(LIFT_TABLES, 1, l[1], &lx, &ly);
+  pivotOnCanvas(LIFT_TABLES, r[0], &gx, &gy);
+  TEST_ASSERT_EQUAL_INT(ry, ly);
+  TEST_ASSERT_INT_WITHIN(1, gx - rx, lx - gx);     // mirrored about the feet
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_picks_nearest_image_from_summed_channels);
@@ -120,5 +155,7 @@ int main(int, char**) {
   RUN_TEST(test_stage_x_moves_everything);
   RUN_TEST(test_facing_mirrors_about_the_feet);
   RUN_TEST(test_subpixel_anchor_rounds_once);
+  RUN_TEST(test_lift_raises_a_part_and_its_tip);
+  RUN_TEST(test_tip_mirrors_with_the_doll);
   return UNITY_END();
 }

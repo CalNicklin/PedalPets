@@ -8,6 +8,8 @@
 namespace skeleton_gen {
 
 static const Character CHARACTER = {"skeleton", CANVAS_W, CANVAS_H, DOLL, CHOREO, MOVE_NAMES, CHANNEL_NAMES,
-                                     2, 11, PALETTE, PIXELS, MARK_PIXELS};
+    2, 11, {5, 7}, {10, 13},
+    23, 24, 15,
+    PALETTE, PIXELS, MARK_PIXELS};
 
 }  // namespace skeleton_gen

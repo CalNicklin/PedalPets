@@ -195,6 +195,34 @@ void test_gait_channel_is_never_amplified_by_the_beat() {
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 4.0f, peak);              // beat_b peaks at 4 (16 quarter units)
 }
 
+void test_requested_move_plays_once_at_a_time() {
+  fresh(Mood::Curious);
+  TEST_ASSERT_TRUE(ch->requestMove(HOP_FWD, t));
+  TEST_ASSERT_FALSE(ch->requestMove(HOP_FWD, t));        // still going
+  frames(Mood::Curious, 7);                               // hop_fwd is 6 frames
+  TEST_ASSERT_TRUE(ch->requestMove(HOP_FWD, t));
+}
+
+void test_a_solo_move_plays_alone() {
+  // idle_a (every 300 ms) made solo: while it plays, no other idle starts.
+  Choreography c = make();
+  static Move solo[8];
+  for (int i = 0; i < 8; i++) solo[i] = c.moves[i];
+  solo[HOP_FWD].solo = true;
+  c.moves = solo;
+  c.moods[(int)Mood::Curious].idleGapMin = c.moods[(int)Mood::Curious].idleGapMax = 60;
+  delete ch;
+  rng = Rng(1);
+  ch = new Choreographer(c, rng);
+  t = 0;
+  ch->reset(Mood::Curious, t);
+  ch->play(HOP_FWD, t);                                   // 6 frames
+  frames(Mood::Curious, 4);                               // an idle is due after 60 ms...
+  TEST_ASSERT_EQUAL_FLOAT(0, ch->weightOf(IDLE_A));      // ...but waits for the solo move
+  frames(Mood::Curious, 4);
+  TEST_ASSERT_TRUE(ch->weightOf(IDLE_A) > 0);
+}
+
 void test_reaction_ducks_other_moves() {
   fresh(Mood::Curious);
   frames(Mood::Curious, 10);
@@ -311,6 +339,8 @@ int main(int, char**) {
   RUN_TEST(test_gaze_points_the_head);
   RUN_TEST(test_requested_turn_plays_the_turn_move_once);
   RUN_TEST(test_gait_channel_is_never_amplified_by_the_beat);
+  RUN_TEST(test_requested_move_plays_once_at_a_time);
+  RUN_TEST(test_a_solo_move_plays_alone);
   RUN_TEST(test_reaction_ducks_other_moves);
   RUN_TEST(test_reaction_fades_in_not_cut);
   RUN_TEST(test_lower_priority_ignored_during_reaction);

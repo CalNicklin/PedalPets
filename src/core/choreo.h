@@ -26,6 +26,7 @@ struct Move {
   uint8_t   flipAt;              // turn round after showing frame flipAt-1 (0 = never)
   uint8_t   mark;                // expression mark to pop up (id + 1; 0 = none) ...
   uint8_t   markAt;              // ... each time this frame is shown
+  bool      solo;                // a posture (lying back, sitting): no other idle starts while it plays
 };
 
 // Expression marks ("!", notes, zzz...): little drawings near the head with
@@ -94,8 +95,8 @@ struct ChoreoConfig {
   uint32_t pickTimeoutMs    = 1500;    // no picks for this long -> mood tempo drives beats
   float    beatAmpBase      = 0.7f;    // beat moves scale with energy: base + energy * gain
   float    beatAmpGain      = 0.5f;
-  float    stageMin         = -28;     // stage x range (pixels)
-  float    stageMax         = 28;
+  float    stageMin         = -34;     // stage x range (pixels)
+  float    stageMax         = 34;
   float    edgeMargin       = 12;      // heading toward an edge this close -> prefer turning
   uint32_t edgeTurnBoost    = 4;       // weight multiplier for turns near an edge
 };
@@ -120,6 +121,7 @@ class Choreographer {
   void setIntent(Intent i);
   void setGaze(float look, float pitch, float eyes, float weight);
   bool requestTurn(uint32_t now);                     // false if it can't turn now
+  bool requestMove(int move, uint32_t now);           // the Mind wants this move (one at a time)
 
   const DollPose& pose() const { return pose_; }
   int  reaction() const;                     // move id of the active reaction, or -1
@@ -133,7 +135,7 @@ class Choreographer {
     int8_t   move = -1;
     uint8_t  frame = 0;
     float    weight = 0, target = 0;
-    bool     reaction = false, beat = false, extend = false, ducked = false;
+    bool     reaction = false, beat = false, extend = false, ducked = false, requested = false;
     uint32_t start = 0;
   };
 

@@ -13,11 +13,15 @@
 // Outputs: an intent (idle vocabulary), a gaze (where the head points), turn
 // requests and a short thought for the telemetry story.
 
-struct Body     { float headX, headY; float facing; float hop; };  // head on screen; facing +1 = beak screen-left
-struct Sighting { float x, y, vx, vy; bool resting; };            // something in the world (a leaf)
+// Head on screen; facing +1 = beak screen-left; reachPx: how far ahead of the
+// head its reach move gets to (0 = it can't reach things).
+struct Body     { float headX, headY; float facing; float hop; float reachPx; };
+struct Sighting { float x, y, vx, vy; bool resting, held; };      // something in the world (a leaf); held = in its hand
 struct Gaze     { float look = 0, pitch = 0, eyes = NAN, weight = 0; };
 
 enum class Focus : uint8_t { Nothing, You, Leaf, Spot };
+// What it wants its body to do about the focus (the character's approach / reach moves).
+enum class Want : uint8_t { None, Approach, Reach };
 
 struct MindConfig {
   uint32_t noticeQuietMs  = 3000;   // a loud hit after this much quiet gets a double-take...
@@ -32,6 +36,7 @@ struct MindConfig {
   float    lookYou        = 45;     // look (degrees) that turns the head to the viewer
   float    lookAway       = -30;
   float    flyingSpeed    = 0.4f;   // px/frame: a leaf moving faster is "flying"
+  float    reachSlack     = 8;      // px either side of its reach that count as in reach
   float    behindMargin   = 6;      // px behind the head before it counts as behind
   uint32_t turnAfterMs    = 500;    // keep watching something behind this long -> turn
   uint32_t landedMemoryMs = 3500;   // a landing stays interesting this long
@@ -53,6 +58,7 @@ class Mind {
   bool takeHeld(uint32_t now, MusicEvent& out);
   void tick(Mood mood, const Body& body, const Sighting* things, int count, uint32_t now);  // once per frame
   bool takeTurn();                         // wants to turn round to face something (once)
+  Want want() const { return want_; }      // this frame
 
   Intent      intent() const { return intent_; }
   Focus       focus() const { return focus_; }
@@ -62,7 +68,7 @@ class Mind {
   float       wantsYou() const { return wantsYou_; }
 
  private:
-  struct Target { Focus focus = Focus::Nothing; int thing = -1; float x = 0, y = 0, salience = 0; };
+  struct Target { Focus focus = Focus::Nothing; int thing = -1; float x = 0, y = 0, salience = 0; bool held = false; };
 
   void   updateDrives(Mood mood, uint32_t now, float dtMs);
   float  scoreYou(Mood mood) const;
@@ -70,6 +76,7 @@ class Mind {
   Target choose(Mood mood, const Body& body, const Sighting* things, int count, uint32_t now) const;
   void   aim(Mood mood, const Body& body, uint32_t now);
   void   decide(Mood mood, uint32_t now);
+  void   act(const Body& body, int count);
   void   think(const char* t) { thought_ = t; }
 
   Rng&       rng_;
@@ -93,4 +100,5 @@ class Mind {
   float      glanceLook_ = 0, glancePitch_ = 0;
   uint32_t   behindSince_ = 0;
   bool       turn_ = false;
+  Want       want_ = Want::None;
 };

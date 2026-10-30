@@ -123,6 +123,17 @@ void Choreographer::setGaze(float look, float pitch, float eyes, float weight) {
   gazeWeight_ = fmaxf(0.0f, fminf(1.0f, weight));
 }
 
+bool Choreographer::requestMove(int move, uint32_t now) {
+  if (move < 0 || reactionSlot()) return false;
+  for (const Slot& s : slots_)
+    if (s.move >= 0 && s.requested && s.target > 0) return false;   // one at a time
+  Slot* s = add(move, now, 1.0f, 1.0f);
+  s->requested = true;
+  lastIdle_ = move;
+  nextIdle_ = now + c_->moves[move].frames * 30u;   // the vocabulary waits for it
+  return true;
+}
+
 bool Choreographer::requestTurn(uint32_t now) {
   if (c_->turnMove < 0 || reactionSlot()) return false;
   for (const Slot& s : slots_)
@@ -192,6 +203,8 @@ const IntentStyle* Choreographer::intentStyle(Mood mood) const {
 }
 
 void Choreographer::startIdle(Mood mood, uint32_t now) {
+  for (const Slot& s : slots_)
+    if (s.move >= 0 && s.target > 0 && c_->moves[s.move].solo) return;   // let it finish
   const MoodStyle& st = c_->moods[(int)mood];
   const IntentStyle* is = intentStyle(mood);
   nextIdle_ = now + (is ? rng_.range(is->idleGapMin, is->idleGapMax) : rng_.range(st.idleGapMin, st.idleGapMax));
