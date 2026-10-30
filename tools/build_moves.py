@@ -11,6 +11,7 @@ also written as PNGs to <parts dir>/marks/ for the timeline tools.
 
 import importlib.util
 import json
+import math
 import struct
 import sys
 import zlib
@@ -27,7 +28,9 @@ class MovesError(Exception):
 
 
 def spline(keys, f):
-    """Cubic Hermite through (frame, value) keys; zero slope at both ends."""
+    """Monotone cubic Hermite through (frame, value) keys (Fritsch-Carlson):
+    flat at both ends and at every peak or plateau, so a curve never passes
+    its keys (a landing never sinks below the ground, travel never drifts back)."""
     ts = [k[0] for k in keys]
     vs = [k[1] for k in keys]
     if f <= ts[0]:
@@ -37,10 +40,17 @@ def spline(keys, f):
     i = max(k for k in range(len(ts) - 1) if ts[k] <= f)
     t0, t1, p0, p1 = ts[i], ts[i + 1], vs[i], vs[i + 1]
 
+    def secant(k):
+        return (vs[k + 1] - vs[k]) / (ts[k + 1] - ts[k])
+
     def slope(k):
         if k == 0 or k == len(ts) - 1:
             return 0.0
-        return (vs[k + 1] - vs[k - 1]) / (ts[k + 1] - ts[k - 1])
+        a, b = secant(k - 1), secant(k)
+        if a * b <= 0:
+            return 0.0
+        m = (vs[k + 1] - vs[k - 1]) / (ts[k + 1] - ts[k - 1])
+        return math.copysign(min(abs(m), 3 * min(abs(a), abs(b))), m)
 
     h = t1 - t0
     m0, m1 = slope(i) * h, slope(i + 1) * h
@@ -65,11 +75,15 @@ def build(mod, channels):
         for ch, keys in m["channels"].items():
             if ch not in channels:
                 raise MovesError(f"move {name}: unknown channel {ch!r}")
+            if any(b[0] <= a[0] for a, b in zip(keys, keys[1:])):
+                raise MovesError(f"move {name}.{ch}: key frames must strictly increase")
             # Travel (x) is the one channel allowed to end away from 0: it's where the pet goes.
             if keys[0][1] != 0 or (keys[-1][1] != 0 and ch != "x"):
                 raise MovesError(f"move {name}.{ch}: must start and end at 0 to blend")
             tracks.append((channels.index(ch), len(samples)))
-            samples += [int(round(spline(keys, f) * 4)) for f in range(m["frames"])]
+            # On twos: each pose holds two frames so the slow panel settles on it.
+            step = 2 if m.get("twos") else 1
+            samples += [int(round(spline(keys, f - f % step) * 4)) for f in range(m["frames"])]
         loop_from, loop_len = m["loop"] or (0, 0)
         until = m["loop_until"] or "None"
         if until != "None" and until not in EVENTS:

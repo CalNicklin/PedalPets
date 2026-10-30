@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pillow"]
+# dependencies = ["pillow", "numpy"]
 # ///
 """Redraw a paper-doll timeline (simulator or device telemetry) and report
 how smooth it is.
 
 Usage:
   uv run tools/doll_timeline.py timeline.csv <doll_dir> [--gif out.gif]
-         [--strip out.png --from MS --to MS] [--scale N]
+         [--strip out.png --from MS --to MS] [--scale N] [--panel]
+
+--panel shows frames as the TN panel displays them (slow pixels ghost; see
+tools/panel.py) and reports how much of each frame is ghosted.
 """
 
 import argparse
@@ -18,6 +21,8 @@ import statistics
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageOps
+
+from panel import GHOST_LEVEL, Panel, ghost_pixels
 
 SCREEN_W, SCREEN_H = 160, 128
 MOODS = ["Asleep", "Curious", "IntoIt", "Hyped"]
@@ -110,7 +115,7 @@ def pct(v, q):
     return s[min(len(s) - 1, int(q * len(s)))] if s else 0
 
 
-def report(rows, art):
+def report(rows, art, panel=False):
     ts = [r["t"] for r in rows]
     gaps = [b - a for a, b in zip(ts, ts[1:])]
     print(f"frames: {len(rows)} over {(ts[-1] - ts[0]) / 1000:.1f} s")
@@ -167,6 +172,17 @@ def report(rows, art):
     for v, t, rx in sorted(changes, reverse=True)[:6]:
         print(f"  {t:>6} ms  {100 * v:.0f}%  ({rx})")
 
+    if panel:
+        p, ghosts = Panel(), []
+        for r in rows:
+            drawn = art.render(r)
+            ghosts.append((ghost_pixels(drawn, p.show(drawn)), r["t"], r["reaction"]))
+        vals = sorted(g[0] for g in ghosts)
+        print(f"panel ghosting (px off by >{GHOST_LEVEL}/255): median {pct(vals, .5)}  p95 {pct(vals, .95)}  max {vals[-1]}  "
+              f"mean {statistics.mean(vals):.0f}")
+        for g, t, rx in sorted(ghosts, reverse=True)[:6]:
+            print(f"  {t:>6} ms  {g}px  ({rx})")
+
     print("timeline:")
     pm, pr = None, None
     for r in rows:
@@ -177,6 +193,16 @@ def report(rows, art):
             if r["reaction"] != "-":
                 print(f"  {r['t']:>6} ms    reaction {r['reaction']}")
             pr = r["reaction"]
+
+
+def displayed(rows, sel, art, panel):
+    """Frames for `sel` as drawn, or as the panel shows them (warmed up on the frames before)."""
+    if not panel:
+        return [art.render(r) for r in sel]
+    p, first = Panel(), rows.index(sel[0])
+    for r in rows[max(0, first - 3):first]:
+        p.show(art.render(r))
+    return [p.show(art.render(r)) for r in sel]
 
 
 def main():
@@ -190,27 +216,30 @@ def main():
     ap.add_argument("--to", dest="t1", type=int, default=10**9)
     ap.add_argument("--scale", type=int, default=2)
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--panel", action="store_true", help="simulate the TN panel's ghosting")
     a = ap.parse_args()
     art = Art(a.doll_dir, a.scene)
     rows = load(a.timeline)
     if not a.quiet:
-        report(rows, art)
+        report(rows, art, a.panel)
     s = a.scale
     if a.strip:
         sel = [r for r in rows if a.t0 <= r["t"] <= a.t1][:72]
+        shown = displayed(rows, sel, art, a.panel)
         cols = 12
         w, h = SCREEN_W * s, SCREEN_H * s + 12
         sheet = Image.new("RGB", (cols * w, ((len(sel) + cols - 1) // cols) * h), (40, 40, 40))
         d = ImageDraw.Draw(sheet)
         for i, r in enumerate(sel):
             x, y = (i % cols) * w, (i // cols) * h
-            sheet.paste(art.render(r).resize((SCREEN_W * s, SCREEN_H * s), Image.NEAREST), (x, y + 12))
+            sheet.paste(shown[i].resize((SCREEN_W * s, SCREEN_H * s), Image.NEAREST), (x, y + 12))
             d.text((x + 2, y), f"{r['t']} {MOODS[r['mood']]} {r['reaction']}", fill=(255, 255, 255))
         sheet.save(a.strip)
         print(f"wrote {a.strip} ({len(sel)} frames)")
     if a.gif:
         sel = [r for r in rows if a.t0 <= r["t"] <= a.t1]
-        frames = [art.render(r).resize((SCREEN_W * s, SCREEN_H * s), Image.NEAREST).convert("RGB") for r in sel]
+        frames = [f.resize((SCREEN_W * s, SCREEN_H * s), Image.NEAREST).convert("RGB")
+                  for f in displayed(rows, sel, art, a.panel)]
         durs = [max(20, b["t"] - a_["t"]) for a_, b in zip(sel, sel[1:])] + [30]
         frames[0].save(a.gif, save_all=True, append_images=frames[1:], duration=durs, loop=0)
         print(f"wrote {a.gif} ({len(frames)} frames)")
