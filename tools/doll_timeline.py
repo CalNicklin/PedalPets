@@ -57,7 +57,7 @@ class Art:
 
     def draw_leaves(self, img, row, front):
         for s, x, y, f in row["leaves"]:
-            if s < 0 or f != front:
+            if s < 0 or f != front or not self.leaves:
                 continue
             sp = self.leaves[s]
             img.alpha_composite(sp, (x - sp.width // 2, y - sp.height + 1))

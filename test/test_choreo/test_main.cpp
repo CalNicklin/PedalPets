@@ -126,6 +126,23 @@ void test_rapid_picks_wait_for_beat_move_to_progress() {
   TEST_ASSERT_EQUAL_INT(2, ch->activeCount());
 }
 
+void test_long_beat_move_plays_until_its_tail() {
+  ChoreoConfig cfg;
+  cfg.beatTailFrames = 1;                                 // beat_b (6 frames) runs to frame 5
+  delete ch;
+  rng = Rng(1);
+  ch = new Choreographer(CH, rng, cfg);
+  t = 0;
+  ch->reset(Mood::IntoIt, t);
+  send(EventType::Pick, Mood::IntoIt);
+  frames(Mood::IntoIt, 4);
+  send(EventType::Pick, Mood::IntoIt);                    // 4/6 through but not at its tail: carries on
+  TEST_ASSERT_EQUAL_INT(1, ch->activeCount());
+  frames(Mood::IntoIt, 1);
+  send(EventType::Pick, Mood::IntoIt);                    // at its tail: crossfade
+  TEST_ASSERT_EQUAL_INT(2, ch->activeCount());
+}
+
 void test_reaction_ducks_other_moves() {
   fresh(Mood::Curious);
   frames(Mood::Curious, 10);
@@ -237,6 +254,7 @@ int main(int, char**) {
   RUN_TEST(test_idle_moves_play_on_their_gap);
   RUN_TEST(test_picks_start_beat_moves_only_when_grooving);
   RUN_TEST(test_rapid_picks_wait_for_beat_move_to_progress);
+  RUN_TEST(test_long_beat_move_plays_until_its_tail);
   RUN_TEST(test_reaction_ducks_other_moves);
   RUN_TEST(test_reaction_fades_in_not_cut);
   RUN_TEST(test_lower_priority_ignored_during_reaction);

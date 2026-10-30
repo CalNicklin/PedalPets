@@ -78,6 +78,7 @@ struct ChoreoConfig {
   uint32_t interruptGuardMs = 120;
   uint32_t cooldownMs       = 1500;
   float    beatRetrigger    = 0.6f;    // a new beat move waits until the last is this far through
+  int      beatTailFrames   = 12;      // ...or, for long moves, until it is this close to its end
   uint32_t pickTimeoutMs    = 1500;    // no picks for this long -> mood tempo drives beats
   float    beatAmpBase      = 0.7f;    // beat moves scale with energy: base + energy * gain
   float    beatAmpGain      = 0.5f;

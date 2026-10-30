@@ -170,12 +170,14 @@ void Choreographer::startIdle(Mood mood, uint32_t now) {
   lastIdle_ = move;
 }
 
-// Beat moves crossfade: a new one starts once the current one is well under way.
+// Beat moves crossfade: a new one starts once the current one is well under way
+// (long moves, like the flap frenzy, play out nearly to the end).
 void Choreographer::startBeat(Mood mood, uint32_t now) {
   if (reactionSlot()) return;
   for (Slot& s : slots_) {
     if (s.move < 0 || !s.beat || s.target <= 0) continue;
-    if (s.frame < cfg_.beatRetrigger * c_.moves[s.move].frames) return;
+    int frames = c_.moves[s.move].frames;
+    if (s.frame < fmaxf(cfg_.beatRetrigger * frames, frames - cfg_.beatTailFrames)) return;
     s.target = 0;
   }
   int move = pickVocab(mood, MoveKind::Beat);

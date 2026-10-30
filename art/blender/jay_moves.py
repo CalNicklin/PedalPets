@@ -121,6 +121,14 @@ move("turn_hop", 22, flip_at=8, hop=[(0, 0), (2, 0), (8, 12), (14, 0), (22, 0)],
      legs=[(0, 0), (2, 1), (5, -1), (11, -1), (14, 0.9), (17, 0.8), (22, 0)],
      squash=[(0, 0), (2, 1), (8, -1), (14, 1), (17, 0.8), (22, 0)],
      **both([(0, 0), (4, 150), (8, 30), (12, 150), (18, 0)]))
+# The peak: six unbroken wing beats, feet planted, crest up, beak open.
+move("flap_frenzy", 52, **both([(0, 0), (4, 155), (8, 25), (12, 158), (16, 25), (20, 160), (24, 25), (28, 160),
+                                  (32, 25), (36, 158), (40, 25), (44, 155), (52, 0)]),
+     hop=[(0, 0), (4, 3), (8, 0), (12, 4), (16, 0), (20, 5), (24, 1), (28, 5), (32, 1), (36, 4), (40, 0), (44, 3), (52, 0)],
+     legs=[(0, 0), (4, 0.5), (48, 0.5), (52, 0)], squash=[(0, 0), (4, -0.5), (48, -0.5), (52, 0)],
+     lean=[(0, 0), (6, -6), (46, -6), (52, 0)], pitch=[(0, 0), (6, -16), (46, -16), (52, 0)],
+     crest=[(0, 0), (4, -40), (48, -40), (52, 0)], jaw=[(0, 0), (4, 26), (48, 26), (52, 0)],
+     tail=[(0, 0), (8, -10), (16, 6), (24, -10), (32, 6), (40, -10), (52, 0)])
 move("rock", 24, lean=[(0, 0), (6, 14), (18, -12), (24, 0)], tail=[(0, 0), (6, -12), (18, 10), (24, 0)],
      pitch=[(0, 0), (6, -8), (18, 8), (24, 0)], **both([(0, 0), (6, 30), (12, 0), (18, 30), (24, 0)]))
 
@@ -176,8 +184,9 @@ VOCAB = {
     "IntoIt":  [("nod", 4, "beat"), ("bob", 3, "beat"), ("side_nod", 2, "beat"), ("tail_pump", 2, "beat"),
                 ("wing_flick", 1, "beat"), ("shuffle", 1, "beat"), ("strut", 3, "beat"), ("blink", 3, "idle"), ("crest_flick", 1, "idle"),
                 ("look_you", 1, "idle"), ("shake", 1, "idle"), ("turn_round", 1, "idle")],
-    "Hyped":   [("hop_flap", 4, "beat"), ("headbang", 3, "beat"), ("flap_burst", 3, "beat"), ("rock", 2, "beat"),
-                ("hop_travel", 3, "beat"), ("turn_hop", 2, "beat"), ("blink", 2, "idle"), ("crest_flick", 1, "idle")],
+    "Hyped":   [("flap_frenzy", 6, "beat"), ("hop_flap", 4, "beat"), ("flap_burst", 3, "beat"), ("headbang", 2, "beat"),
+                ("rock", 1, "beat"), ("hop_travel", 1, "beat"), ("turn_hop", 1, "beat"), ("blink", 2, "idle"),
+                ("crest_flick", 1, "idle")],
 }
 IDLE_GAPS = {"Asleep": (1800, 4500), "Curious": (500, 1600), "IntoIt": (1200, 3000), "Hyped": (1200, 3000)}
 BEAT_MS = {"Asleep": 0, "Curious": 0, "IntoIt": 560, "Hyped": 480}
