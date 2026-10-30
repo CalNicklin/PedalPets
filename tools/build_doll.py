@@ -84,6 +84,8 @@ def build(doll_dir):
             "pixels": pixels, "palette": pal, "channels": channels,
             "draw_order": [index[n] for n in meta["draw_order"]],
             "hop": channels.index("hop") if "hop" in channels else -1,
+            "x": channels.index("x") if "x" in channels else -1,
+            "face": channels.index("face") if "face" in channels else -1,
             "canvas": meta["canvas"]}
 
 
@@ -111,7 +113,7 @@ def emit_meta(t):
     out.append("static const uint8_t DRAW_ORDER[] = {" + ", ".join(map(str, t["draw_order"])) + "};")
     out += ["", "static const DollTables DOLL = {",
             f"  PARTS, {len(t['parts'])}, DRAW_ORDER, IMAGES, ANCHORS, AXIS_VALUES,",
-            f"  {len(t['channels'])}, {t['hop']},", "};", "", "}  // namespace doll_gen", ""]
+            f"  {len(t['channels'])}, {t['hop']}, {t['x']}, {t['face']},", "};", "", "}  // namespace doll_gen", ""]
     return "\n".join(out)
 
 

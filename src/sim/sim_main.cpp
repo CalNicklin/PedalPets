@@ -59,10 +59,12 @@ int main(int argc, char** argv) {
   MoodModel     mood;
   Choreographer choreo(doll_gen::CHOREO, rng);
   DollPlacement out[doll_gen::PART_COUNT];
+  MarkPlacement marks[CHOREO_MAX_MARKS];
   mood.reset(0);
   choreo.reset(mood.mood(), 0);
-  printf("t_ms,mood,energy,reaction,frame_us");
+  printf("t_ms,mood,energy,reaction,frame_us,flip");
   for (int i = 0; i < doll_gen::PART_COUNT; i++) printf(",p%d_img,p%d_x,p%d_y", i, i, i);
+  for (int i = 0; i < CHOREO_MAX_MARKS; i++) printf(",m%d_img,m%d_x,m%d_y", i, i, i);
   printf("\n");
 #else
   Performer     performer(gen::ART, rng);
@@ -89,8 +91,12 @@ int main(int argc, char** argv) {
       choreo.tick(mood.mood(), mood.energy(), now);
       composeDoll(doll_gen::DOLL, choreo.pose(), out);
       int rx = choreo.reaction();
-      printf("%u,%d,%.3f,%s,", now, (int)mood.mood(), mood.energy(), rx >= 0 ? doll_gen::MOVE_NAMES[rx] : "-");
+      printf("%u,%d,%.3f,%s,,%d", now, (int)mood.mood(), mood.energy(), rx >= 0 ? doll_gen::MOVE_NAMES[rx] : "-",
+             out[0].flip ? 1 : 0);
       for (int i = 0; i < doll_gen::PART_COUNT; i++) printf(",%u,%d,%d", out[i].image, out[i].x, out[i].y);
+      int nm = placeMarks(doll_gen::CHOREO, choreo, doll_gen::DOLL, out, marks);
+      for (int i = 0; i < CHOREO_MAX_MARKS; i++)
+        printf(",%d,%d,%d", i < nm ? marks[i].image : -1, i < nm ? marks[i].x : 0, i < nm ? marks[i].y : 0);
       if (getenv("PEDALPETS_CHANNELS")) {   // debug: raw channel values after the parts
         for (int c = 0; c < doll_gen::CHANNEL_COUNT; c++) printf(",%s=%.1f", doll_gen::CHANNEL_NAMES[c], choreo.pose().ch[c]);
       }

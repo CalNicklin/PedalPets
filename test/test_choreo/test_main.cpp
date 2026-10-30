@@ -4,7 +4,7 @@
 void setUp() {}
 void tearDown() {}
 
-// Channels: 0 hop, 1 a, 2 b. Samples in quarter units.
+// Channels: 0 hop, 1 a, 2 b, 3 stage x, 4 facing. Samples in quarter units.
 static const int16_t SAMPLES[] = {
   0, 4, 8, 0,              // 0 idle_a  (ch1)
   0, 8, 16, 8, 0, 0,       // 1 beat_b  (ch2)
@@ -12,8 +12,10 @@ static const int16_t SAMPLES[] = {
   0, 20, 20, 20, 20, 0,    // 3 react_loop (ch1), loop frames 1..3
   0, 12, 0,                // 4 wake (ch1)
   0, 40, 0,                // 5 point (ch2), after a freeze
+  0, 8, 16, 24, 24, 24,    // 6 hop_fwd: travels 6 px forward (stage x)
+  0, 0, 0, 0,              // 7 turn: flips facing at frame 2
 };
-static const MoveTrack TRACKS[] = {{1, 0}, {2, 4}, {1, 10}, {1, 15}, {1, 21}, {2, 24}};
+static const MoveTrack TRACKS[] = {{1, 0}, {2, 4}, {1, 10}, {1, 15}, {1, 21}, {2, 24}, {3, 27}, {1, 33}};
 static const Move MOVES[] = {
   // frames, tracks, firstTrack, loopFrom, loopLen, loopUntil, loopMaxMs, freezeMs
   {4, 1, 0, 0, 0, EventType::None, 0, 0},
@@ -22,9 +24,22 @@ static const Move MOVES[] = {
   {6, 1, 3, 1, 3, EventType::SustainEnd, 1000, 0},
   {3, 1, 4, 0, 0, EventType::None, 0, 0},
   {3, 1, 5, 0, 0, EventType::None, 0, 300},
+  {6, 1, 6, 0, 0, EventType::None, 0, 0},
+  {4, 1, 7, 0, 0, EventType::None, 0, 0, 3},   // flipAt = frame 2 (+1)
 };
-enum { IDLE_A, BEAT_B, REACT, REACT_LOOP, WAKE, POINT };
-static const VocabEntry VOCAB[] = {{IDLE_A, 1, MoveKind::Idle}, {BEAT_B, 1, MoveKind::Beat}};
+// One mark ("!"): two frames, then gone. REACT (BigHit) spawns it at frame 1.
+static const MarkFrame MARK_FRAMES[] = {{0, 2, -20}, {1, 2, -22}};
+static const MarkAnim MARKS[] = {{0, 2}};
+static Move withMark() {
+  Move m = MOVES[2];
+  m.mark = 1;      // mark id + 1
+  m.markAt = 1;
+  return m;
+}
+static Move MOVES_MARKED[8];
+enum { IDLE_A, BEAT_B, REACT, REACT_LOOP, WAKE, POINT, HOP_FWD, TURN };
+static const VocabEntry VOCAB[] = {{IDLE_A, 1, MoveKind::Idle}, {BEAT_B, 1, MoveKind::Beat},
+                                   {HOP_FWD, 1, MoveKind::Idle}, {TURN, 1, MoveKind::Idle}};
 static const uint8_t REACTION_IDS[] = {REACT, REACT_LOOP, WAKE, POINT, REACT_LOOP};
 static const ReactionMoves REACTIONS[] = {
   {Trigger::BigHit, 0, 1}, {Trigger::Sustain, 1, 1}, {Trigger::Wake, 2, 1}, {Trigger::Cut, 3, 1},
@@ -32,9 +47,17 @@ static const ReactionMoves REACTIONS[] = {
 };
 static Choreography make() {
   Choreography c = {};
-  c.moves = MOVES; c.moveCount = 6; c.tracks = TRACKS; c.samples = SAMPLES;
+  c.xChannel = -1; c.faceChannel = -1;
+  for (int i = 0; i < 8; i++) MOVES_MARKED[i] = MOVES[i];
+  MOVES_MARKED[2] = withMark();
+  c.moves = MOVES_MARKED; c.moveCount = 8; c.tracks = TRACKS; c.samples = SAMPLES;
+  c.marks = MARKS; c.markFrames = MARK_FRAMES; c.markCount = 1;
   c.vocab = VOCAB; c.reactions = REACTIONS; c.reactionCount = 5; c.reactionMoveIds = REACTION_IDS;
-  c.channelCount = 3;
+  c.channelCount = 5; c.xChannel = 3; c.faceChannel = 4;
+  c.moods[(int)Mood::Hyped].firstVocab = 2;             // wanders: hop forward or turn
+  c.moods[(int)Mood::Hyped].vocabCount = 2;
+  c.moods[(int)Mood::Hyped].idleGapMin = 300;
+  c.moods[(int)Mood::Hyped].idleGapMax = 300;
   c.moods[(int)Mood::Asleep].stance[1] = 40;           // a = 10 while asleep
   c.moods[(int)Mood::Curious].firstVocab = 0;           // idle_a every 300 ms
   c.moods[(int)Mood::Curious].vocabCount = 1;
@@ -163,6 +186,51 @@ void test_wake_on_mood_change() {
   TEST_ASSERT_EQUAL_INT(WAKE, ch->reaction());
 }
 
+void test_travel_moves_along_the_stage_and_stays() {
+  fresh(Mood::Curious);
+  TEST_ASSERT_EQUAL_FLOAT(1, ch->pose().ch[4]);           // facing default (beak to screen-left)
+  ch->play(HOP_FWD, t);
+  frames(Mood::Curious, 6);
+  TEST_ASSERT_EQUAL_FLOAT(-6, ch->pose().ch[3]);          // forward = screen-left
+  frames(Mood::Curious, 5);
+  TEST_ASSERT_EQUAL_FLOAT(-6, ch->pose().ch[3]);          // stays where it landed
+}
+
+void test_turn_flips_facing_then_travel_reverses() {
+  fresh(Mood::Curious);
+  ch->play(TURN, t);
+  frames(Mood::Curious, 4);
+  TEST_ASSERT_EQUAL_FLOAT(-1, ch->pose().ch[4]);
+  ch->play(HOP_FWD, t);
+  frames(Mood::Curious, 7);
+  TEST_ASSERT_EQUAL_FLOAT(6, ch->pose().ch[3]);
+}
+
+void test_edge_of_stage_forces_a_turn() {
+  fresh(Mood::Hyped);
+  for (int i = 0; i < 4; i++) { ch->play(HOP_FWD, t); frames(Mood::Curious, 7); }
+  TEST_ASSERT_EQUAL_FLOAT(-24, ch->pose().ch[3]);         // another hop would leave the stage
+  for (int i = 0; i < 12; i++) {                          // let the Hyped vocabulary pick
+    frames(Mood::Hyped, 1);
+    if (ch->weightOf(TURN) > 0 || ch->weightOf(HOP_FWD) > 0) break;
+  }
+  TEST_ASSERT_TRUE(ch->weightOf(TURN) > 0);
+  TEST_ASSERT_EQUAL_FLOAT(0, ch->weightOf(HOP_FWD));
+}
+
+void test_moves_spawn_marks_that_play_out() {
+  fresh(Mood::Curious);
+  send(EventType::BigHit, Mood::Curious);
+  TEST_ASSERT_EQUAL_INT(0, ch->markCount());
+  frames(Mood::Curious, 2);                       // frame 1 shown -> "!" appears
+  TEST_ASSERT_EQUAL_INT(1, ch->markCount());
+  TEST_ASSERT_EQUAL_INT(0, ch->markFrame(0).image);
+  frames(Mood::Curious, 1);
+  TEST_ASSERT_EQUAL_INT(-22, ch->markFrame(0).dy);
+  frames(Mood::Curious, 1);
+  TEST_ASSERT_EQUAL_INT(0, ch->markCount());      // played out
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_stance_eases_toward_mood);
@@ -176,5 +244,9 @@ int main(int, char**) {
   RUN_TEST(test_loop_section_caps_at_max);
   RUN_TEST(test_freeze_holds_pose_then_plays);
   RUN_TEST(test_wake_on_mood_change);
+  RUN_TEST(test_travel_moves_along_the_stage_and_stays);
+  RUN_TEST(test_turn_flips_facing_then_travel_reverses);
+  RUN_TEST(test_edge_of_stage_forces_a_turn);
+  RUN_TEST(test_moves_spawn_marks_that_play_out);
   return UNITY_END();
 }

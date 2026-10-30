@@ -40,12 +40,15 @@ struct DollTables {
   const int16_t*    axisValues;
   uint8_t           channelCount;
   int8_t            hopChannel;                    // lifts the ground part (pixels)
+  int8_t            xChannel;                      // moves the whole doll across the stage (pixels)
+  int8_t            faceChannel;                   // < 0 mirrors the doll about its feet
 };
 
 struct DollPose { float ch[DOLL_MAX_CHANNELS]; };
 
-// Where to draw one part: image index and canvas position of its crop.
-struct DollPlacement { uint16_t image; int16_t x, y; };
+// Where to draw one part: image index, canvas position of its crop, and
+// whether to draw it mirrored left-right.
+struct DollPlacement { uint16_t image; int16_t x, y; bool flip; };
 
 // Fills out[partCount], indexed like tables.parts.
 void composeDoll(const DollTables& t, const DollPose& p, DollPlacement* out);

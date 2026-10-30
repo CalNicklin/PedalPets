@@ -8,8 +8,10 @@ void tearDown() {}
 // one axis summing channels 1 and 2). Channel 3 is the hop.
 //   base images: pivot (40,100) for both; anchor for arm at (50,60) / (52,64)
 //   arm images:  pivot (10,10) / (12,10)
-static const int16_t AXIS_VALUES[] = {0, 1,          // base: shape 0/1
-                                      -10, 0, 10};   // arm: angle -10/0/10
+// Axis values are in quarter units, so axes can step in fractions.
+static const int16_t AXIS_VALUES[] = {0, 4,             // base: shape 0/1
+                                      -40, 0, 40,       // arm: angle -10/0/10
+                                      0, 1, 2};         // fine: 0, 0.25, 0.5
 static const DollAnchor ANCHORS[] = {{50 * 4, 60 * 4}, {52 * 4, 64 * 4}};
 static const DollImage IMAGES[] = {
   // x, y, w, h, pivotX4, pivotY4, firstAnchor
@@ -25,11 +27,12 @@ static const DollPart PARTS[] = {
   {0, 0, 1, {{3, 2, 0b0110}, {0, 0, 0}, {0, 0, 0}}, 2, 3},
 };
 static const uint8_t DRAW_ORDER[] = {0, 1};
-static const DollTables TABLES = {PARTS, 2, DRAW_ORDER, IMAGES, ANCHORS, AXIS_VALUES, 4, 3};
+// Channels: 0-2 axes, 3 hop, 4 stage x, 5 facing.
+static const DollTables TABLES = {PARTS, 2, DRAW_ORDER, IMAGES, ANCHORS, AXIS_VALUES, 6, 3, 4, 5};
 
-static DollPose pose(float c0, float c1, float c2, float hop) {
+static DollPose pose(float c0, float c1, float c2, float hop, float x = 0, float face = 1) {
   DollPose p = {};
-  p.ch[0] = c0; p.ch[1] = c1; p.ch[2] = c2; p.ch[3] = hop;
+  p.ch[0] = c0; p.ch[1] = c1; p.ch[2] = c2; p.ch[3] = hop; p.ch[4] = x; p.ch[5] = face;
   return p;
 }
 
@@ -65,6 +68,14 @@ void test_child_hangs_from_parent_anchor() {
   TEST_ASSERT_EQUAL_INT16(5 + 54, out[1].y);
 }
 
+void test_fractional_axis_steps() {
+  static const DollPart FINE[] = {{-1, 0, 1, {{3, 5, 0b0001}, {0, 0, 0}, {0, 0, 0}}, 0, 2}};
+  static const DollTables T = {FINE, 1, DRAW_ORDER, IMAGES, ANCHORS, AXIS_VALUES, 6, 3, 4, 5};
+  DollPlacement out[1];
+  composeDoll(T, pose(0.3f, 0, 0, 0), out);   // nearest of 0 / 0.25 / 0.5 is 0.25
+  TEST_ASSERT_EQUAL_UINT16(1, out[0].image);
+}
+
 void test_hop_lifts_everything() {
   DollPlacement out[2];
   composeDoll(TABLES, pose(0, 0, 0, 7), out);
@@ -81,12 +92,33 @@ void test_subpixel_anchor_rounds_once() {
   TEST_ASSERT_EQUAL_INT16(49, out[0].y);
 }
 
+void test_stage_x_moves_everything() {
+  DollPlacement out[2];
+  composeDoll(TABLES, pose(0, 0, 0, 0, -12), out);
+  TEST_ASSERT_EQUAL_INT16(30 - 12, out[0].x);
+  TEST_ASSERT_EQUAL_INT16(46 - 12, out[1].x);
+  TEST_ASSERT_FALSE(out[0].flip);
+}
+
+void test_facing_mirrors_about_the_feet() {
+  DollPlacement out[2];
+  composeDoll(TABLES, pose(0, 0, 0, 0, 0, -1), out);
+  // Ground pivot x = 40. Base crop [30, 50) mirrors to [30, 50); arm [46, 56) to [24, 34).
+  TEST_ASSERT_TRUE(out[0].flip && out[1].flip);
+  TEST_ASSERT_EQUAL_INT16(30, out[0].x);
+  TEST_ASSERT_EQUAL_INT16(24, out[1].x);
+  TEST_ASSERT_EQUAL_INT16(55, out[1].y);     // vertical unchanged
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_picks_nearest_image_from_summed_channels);
   RUN_TEST(test_ties_pick_lower_value);
   RUN_TEST(test_child_hangs_from_parent_anchor);
+  RUN_TEST(test_fractional_axis_steps);
   RUN_TEST(test_hop_lifts_everything);
+  RUN_TEST(test_stage_x_moves_everything);
+  RUN_TEST(test_facing_mirrors_about_the_feet);
   RUN_TEST(test_subpixel_anchor_rounds_once);
   return UNITY_END();
 }

@@ -17,7 +17,7 @@ import json
 import statistics
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 SCREEN_W, SCREEN_H = 160, 128
 MOODS = ["Asleep", "Curious", "IntoIt", "Hyped"]
@@ -38,23 +38,34 @@ class Art:
                 im = Image.open(d / "poses" / img["file"]).convert("RGBA")
                 box = im.getchannel("A").getbbox() or (0, 0, 1, 1)
                 self.crops.append(im.crop(box))
+                self.flipped = getattr(self, "flipped", [])
+                self.flipped.append(ImageOps.mirror(im.crop(box)))
                 self.pivots.append((img["pivot"][0] - box[0], img["pivot"][1] - box[1]))
                 self.labels.append(f"{p['name']}{img['values']}")
         self.ox, self.oy = (SCREEN_W - self.canvas[0]) // 2, SCREEN_H - self.canvas[1]
+        self.marks = []
+        mj = d / "marks" / "marks.json"
+        if mj.exists():
+            self.marks = [Image.open(d / "marks" / f"{n}.png").convert("RGBA")
+                          for n in json.loads(mj.read_text())["images"]]
 
     def render(self, row):
         img = Image.new("RGBA", (SCREEN_W, SCREEN_H), (*BG, 255))
         ImageDraw.Draw(img).ellipse([80 - 36, 46 - 36, 80 + 36, 46 + 36], fill=SUN)
+        crops = self.flipped if row["flip"] else self.crops
         for i in self.order:
             n, x, y = row["parts"][i]
-            img.alpha_composite(self.crops[n], (self.ox + x, self.oy + y))
+            img.alpha_composite(crops[n], (self.ox + x, self.oy + y))
+        for n, x, y in row["marks"]:
+            img.alpha_composite(self.marks[n], (self.ox + x, self.oy + y))
         return img
 
     def mask(self, row):
         m = Image.new("L", (SCREEN_W, SCREEN_H), 0)
         for i in self.order:
             n, x, y = row["parts"][i]
-            m.paste(255, (self.ox + x, self.oy + y), self.crops[n].getchannel("A"))
+            crop = (self.flipped if row["flip"] else self.crops)[n]
+            m.paste(255, (self.ox + x, self.oy + y), crop.getchannel("A"))
         return m
 
 
@@ -62,10 +73,14 @@ def load(path):
     rows = []
     with open(path) as f:
         for r in csv.DictReader(f):
-            n = sum(1 for k in r if k.endswith("_img"))
+            n = sum(1 for k in r if k.startswith("p") and k.endswith("_img"))
+            nm = sum(1 for k in r if k.startswith("m") and k.endswith("_img"))
             rows.append({"t": int(r["t_ms"]), "mood": int(r["mood"]), "energy": r["energy"],
                          "reaction": r["reaction"], "frame_us": int(r["frame_us"]) if r["frame_us"] else None,
-                         "parts": [(int(r[f"p{i}_img"]), int(r[f"p{i}_x"]), int(r[f"p{i}_y"])) for i in range(n)]})
+                         "flip": r.get("flip") == "1",
+                         "parts": [(int(r[f"p{i}_img"]), int(r[f"p{i}_x"]), int(r[f"p{i}_y"])) for i in range(n)],
+                         "marks": [(int(r[f"m{i}_img"]), int(r[f"m{i}_x"]), int(r[f"m{i}_y"]))
+                                   for i in range(nm) if int(r[f"m{i}_img"]) >= 0]})
     return rows
 
 
@@ -88,14 +103,21 @@ def report(rows, art):
     # body together). Fast motion moves a part a lot every frame, steadily; a
     # glitch is a sudden change in that velocity: a part lurching out of line
     # for a frame, or an image step pulling it. So measure the jerk.
+    def screen_pivot(r, n, x, y):
+        px, py = art.pivots[n]
+        if r["flip"]:
+            px = art.crops[n].width - px
+        return x + px, y + py
+
     def pivot(r, i):
-        n, x, y = r["parts"][i]
-        g = r["parts"][0]
-        return (x + art.pivots[n][0] - g[1] - art.pivots[g[0]][0],
-                y + art.pivots[n][1] - g[2] - art.pivots[g[0]][1])
+        gx, gy = screen_pivot(r, *r["parts"][0])
+        px, py = screen_pivot(r, *r["parts"][i])
+        return px - gx, py - gy
 
     jerks, fastest = [], 0
     for a, b, c in zip(rows, rows[1:], rows[2:]):
+        if not a["flip"] == b["flip"] == c["flip"]:
+            continue                     # turning round is a deliberate mirror, not a glitch
         for i in range(1, len(a["parts"])):
             pa, pb, pc = pivot(a, i), pivot(b, i), pivot(c, i)
             v1 = (pb[0] - pa[0], pb[1] - pa[1])

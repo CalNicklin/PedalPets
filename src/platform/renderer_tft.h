@@ -16,7 +16,8 @@ class RendererTft {
   void begin();
 #if PEDALPETS_DOLL
   // Paper doll: every part at its placement, back to front.
-  void drawDoll(const DollPlacement* parts, const HudInfo* hud);
+  void drawDoll(const DollPlacement* parts, const struct MarkPlacement* marks, int markCount,
+                const HudInfo* hud);
 #else
   // Whole-frame clip art.
   void draw(uint16_t pose, Eye eye, const HudInfo* hud);  // hud == nullptr hides it
@@ -25,7 +26,7 @@ class RendererTft {
  private:
   void background();
   void finish(const HudInfo* hud);
-  void blitPal4(const uint8_t* src, int w, int h, int x0, int y0);
+  void blitPal4(const uint8_t* src, int w, int h, int x0, int y0, bool flip = false);
   void drawEyes(int cx, int cy, Eye eye);
 
   TFT_eSPI    tft_;

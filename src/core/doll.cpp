@@ -38,7 +38,8 @@ void composeDoll(const DollTables& t, const DollPose& p, DollPlacement* out) {
     if (part.parent < 0) {
       const DollImage& rest = t.images[part.firstImage];
       float hop = t.hopChannel >= 0 ? p.ch[t.hopChannel] : 0.0f;
-      ax4 = rest.pivotX4;
+      float x = t.xChannel >= 0 ? p.ch[t.xChannel] : 0.0f;
+      ax4 = rest.pivotX4 + (int32_t)lroundf(x * 4);
       ay4 = rest.pivotY4 - (int32_t)lroundf(hop * 4);
     } else {
       const DollImage& pim = t.images[out[part.parent].image];
@@ -48,6 +49,16 @@ void composeDoll(const DollTables& t, const DollPose& p, DollPlacement* out) {
     }
     dx4[i] = ax4 - im.pivotX4;
     dy4[i] = ay4 - im.pivotY4;
-    out[i] = {img, (int16_t)(im.x + roundQuarter(dx4[i])), (int16_t)(im.y + roundQuarter(dy4[i]))};
+    out[i] = {img, (int16_t)(im.x + roundQuarter(dx4[i])), (int16_t)(im.y + roundQuarter(dy4[i])), false};
+  }
+
+  // Facing the other way: mirror every part about the ground pivot (the feet).
+  if (t.faceChannel >= 0 && p.ch[t.faceChannel] < 0) {
+    const DollImage& g = t.images[out[0].image];
+    int16_t mirror2 = roundQuarter(2 * (g.pivotX4 + dx4[0]));   // 2 x pivot, in pixels
+    for (int i = 0; i < t.partCount; i++) {
+      out[i].x = mirror2 - out[i].x - t.images[out[i].image].w;
+      out[i].flip = true;
+    }
   }
 }

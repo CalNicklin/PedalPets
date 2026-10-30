@@ -21,7 +21,11 @@ HEADER = "t_ms,pose,eye,mood,energy,reaction,step,frame_us"   # clip packs ("T,"
 
 def doll_header(n_parts):
     """Paper-doll packs ("D," lines)."""
-    return "t_ms,mood,energy,reaction,frame_us" + "".join(f",p{i}_img,p{i}_x,p{i}_y" for i in range(n_parts))
+    return ("t_ms,mood,energy,reaction,frame_us,flip" + "".join(f",p{i}_img,p{i}_x,p{i}_y" for i in range(n_parts))
+            + "".join(f",m{i}_img,m{i}_x,m{i}_y" for i in range(MARKS)))
+
+
+MARKS = 3   # CHOREO_MAX_MARKS
 
 
 def main():
@@ -53,7 +57,7 @@ def main():
     s.write(b"t")
     doll = rows and rows[0].startswith("D,")
     rows = [r[2:] for r in rows]
-    header = doll_header((rows[0].count(",") - 4) // 3) if doll else HEADER
+    header = doll_header((rows[0].count(",") - 5) // 3 - MARKS) if doll else HEADER
     with open(a.out, "w") as f:
         f.write(header + "\n" + "\n".join(rows) + "\n")
     print(f"wrote {a.out} ({len(rows)} frames)")

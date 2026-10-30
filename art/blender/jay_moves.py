@@ -14,9 +14,11 @@ so they blend in and out of anything. Frames are 30 ms.
 MOVES = {}
 
 
-def move(name, frames, loop=None, loop_until=None, loop_max=0, freeze_ms=0, **channels):
+def move(name, frames, loop=None, loop_until=None, loop_max=0, freeze_ms=0, flip_at=None, **channels):
+    """x keys are travel forward (toward the beak) and may end away from 0;
+    flip_at turns the pet round after that frame (hide it at a hop's apex)."""
     MOVES[name] = {"frames": frames, "loop": loop, "loop_until": loop_until, "loop_max": loop_max,
-                   "freeze_ms": freeze_ms, "channels": channels}
+                   "freeze_ms": freeze_ms, "flip_at": flip_at, "channels": channels}
 
 
 def both(keys):
@@ -39,6 +41,32 @@ move("hop_small", 22, hop=[(0, 0), (4, 0), (9, 7), (14, 0), (22, 0)],
      legs=[(0, 0), (3, 1), (7, -1), (11, -1), (14, 0.8), (17, 0.8), (22, 0)],
      squash=[(0, 0), (3, 1), (8, -1), (14, 0.8), (17, 0.6), (22, 0)], flapL=[(0, 0), (8, 40), (15, 0)],
      flapR=[(0, 0), (8, 40), (15, 0)])
+
+# Getting about the stage (x = travel toward the beak, in pixels; it stays put)
+move("hop_fwd", 20, hop=[(0, 0), (4, 0), (9, 6), (14, 0), (20, 0)],
+     legs=[(0, 0), (3, 0.75), (7, -1), (11, -1), (14, 0.6), (20, 0)],
+     squash=[(0, 0), (3, 0.75), (8, -0.75), (14, 0.6), (20, 0)], x=[(0, 0), (4, 0), (14, 8), (20, 8)],
+     **both([(0, 0), (8, 30), (14, 0)]), tail=[(0, 0), (9, 10), (16, 0)])
+move("hop_fwd2", 36, hop=[(0, 0), (4, 0), (9, 6), (14, 0), (17, 0), (22, 6), (27, 0), (36, 0)],
+     legs=[(0, 0), (3, 0.75), (7, -1), (11, -1), (14, 0.5), (16, 0.5), (20, -1), (24, -1), (27, 0.6), (36, 0)],
+     squash=[(0, 0), (3, 0.75), (8, -0.75), (14, 0.5), (16, 0.5), (21, -0.75), (27, 0.6), (36, 0)],
+     x=[(0, 0), (4, 0), (14, 8), (17, 8), (27, 16), (36, 16)], **both([(0, 0), (8, 30), (14, 0), (21, 30), (27, 0)]))
+move("turn_round", 20, flip_at=8, hop=[(0, 0), (3, 0), (8, 6), (13, 0), (20, 0)],
+     legs=[(0, 0), (2, 0.75), (6, -1), (10, -1), (13, 0.6), (20, 0)],
+     squash=[(0, 0), (2, 0.75), (8, -0.5), (13, 0.6), (20, 0)], **both([(0, 0), (7, 40), (13, 0)]))
+move("shuffle", 14, x=[(0, 0), (3, 0), (9, 4), (14, 4)], legs=[(0, 0), (4, 0.5), (8, 0), (11, 0.5), (14, 0)],
+     squash=[(0, 0), (4, 0.5), (8, 0), (11, 0.5), (14, 0)], tail=[(0, 0), (5, 8), (14, 0)])
+
+# New behaviours
+move("peck", 32, lean=[(0, 0), (8, 18), (24, 18), (32, 0)],
+     pitch=[(0, 0), (8, 36), (11, 46), (14, 36), (17, 46), (20, 36), (24, 30), (32, 0)],
+     tail=[(0, 0), (8, 14), (24, 14), (32, 0)], squash=[(0, 0), (8, 0.5), (24, 0.5), (32, 0)])
+move("look_you", 52, look=[(0, 0), (8, 45), (42, 45), (52, 0)], crest=[(0, 0), (8, -14), (42, -12), (52, 0)],
+     eyes=[(0, 0), (24, 0), (25, 2), (27, 2), (28, 0), (52, 0)])
+move("shake", 26, look=[(0, 0), (4, 18), (8, -18), (12, 18), (16, -12), (22, 0), (26, 0)],
+     squash=[(0, 0), (4, 0.75), (8, -0.5), (12, 0.75), (16, -0.25), (22, 0), (26, 0)],
+     crest=[(0, 0), (4, -20), (12, -24), (22, 0), (26, 0)], **both([(0, 0), (6, 30), (12, 10), (18, 25), (26, 0)]),
+     tail=[(0, 0), (5, 12), (10, -8), (16, 6), (26, 0)])
 
 # Asleep
 move("breathe", 60, pitch=[(0, 0), (30, 5), (60, 0)], tail=[(0, 0), (30, -4), (60, 0)])
@@ -66,11 +94,20 @@ move("headbang", 12, pitch=[(0, 0), (4, 30), (8, -12), (12, 0)], lean=[(0, 0), (
      jaw=[(0, 0), (4, 20), (12, 0)], squash=[(0, 0), (4, 1), (12, 0)], tail=[(0, 0), (5, -14), (12, 0)])
 move("flap_burst", 16, **both([(0, 0), (4, 155), (8, 25), (12, 155), (16, 0)]),
      hop=[(0, 0), (4, 4), (8, 1), (12, 4), (16, 0)], crest=[(0, 0), (4, -10), (16, 0)])
+move("hop_travel", 22, hop=[(0, 0), (2, 0), (8, 12), (14, 0), (22, 0)],
+     legs=[(0, 0), (2, 1), (5, -1), (11, -1), (14, 0.9), (17, 0.8), (22, 0)],
+     squash=[(0, 0), (2, 1), (8, -1), (14, 1), (17, 0.8), (22, 0)], x=[(0, 0), (2, 0), (14, 12), (22, 12)],
+     **both([(0, 0), (4, 150), (8, 30), (12, 150), (18, 0)]), jaw=[(0, 0), (8, 20), (18, 0)])
+move("turn_hop", 22, flip_at=8, hop=[(0, 0), (2, 0), (8, 12), (14, 0), (22, 0)],
+     legs=[(0, 0), (2, 1), (5, -1), (11, -1), (14, 0.9), (17, 0.8), (22, 0)],
+     squash=[(0, 0), (2, 1), (8, -1), (14, 1), (17, 0.8), (22, 0)],
+     **both([(0, 0), (4, 150), (8, 30), (12, 150), (18, 0)]))
 move("rock", 24, lean=[(0, 0), (6, 14), (18, -12), (24, 0)], tail=[(0, 0), (6, -12), (18, 10), (24, 0)],
      pitch=[(0, 0), (6, -8), (18, 8), (24, 0)], **both([(0, 0), (6, 30), (12, 0), (18, 30), (24, 0)]))
 
 # --- reactions -----------------------------------------------------------------
-move("startle", 30, lean=[(0, 0), (6, -14), (16, -10), (24, 4), (30, 0)],
+move("startle", 30, x=[(0, 0), (2, 0), (8, -6), (14, -8), (30, -8)],
+     lean=[(0, 0), (6, -14), (16, -10), (24, 4), (30, 0)],
      hop=[(0, 0), (2, 0), (6, 9), (13, 0), (30, 0)],
      legs=[(0, 0), (2, 1), (5, -1), (11, -1), (14, 0.9), (18, 0.7), (24, 0)],
      squash=[(0, 0), (2, 1), (6, -1), (14, 1), (18, 0.7), (24, 0)], eyes=[(0, 0), (3, -1), (20, -1), (26, 0)],
@@ -114,11 +151,14 @@ VOCAB = {
     "Asleep":  [("breathe", 6, "idle"), ("twitch", 1, "idle")],
     "Curious": [("look_l", 3, "idle"), ("look_r", 3, "idle"), ("tilt", 2, "idle"), ("blink", 4, "idle"),
                 ("double_blink", 1, "idle"), ("crest_flick", 2, "idle"), ("preen", 1, "idle"),
-                ("tail_flick", 2, "idle"), ("hop_small", 1, "idle")],
+                ("tail_flick", 2, "idle"), ("hop_small", 1, "idle"), ("hop_fwd", 4, "idle"),
+                ("hop_fwd2", 1, "idle"), ("turn_round", 3, "idle"), ("shuffle", 1, "idle"),
+                ("peck", 2, "idle"), ("look_you", 2, "idle"), ("shake", 1, "idle")],
     "IntoIt":  [("nod", 4, "beat"), ("bob", 3, "beat"), ("side_nod", 2, "beat"), ("tail_pump", 2, "beat"),
-                ("wing_flick", 1, "beat"), ("blink", 3, "idle"), ("crest_flick", 1, "idle")],
+                ("wing_flick", 1, "beat"), ("shuffle", 1, "beat"), ("blink", 3, "idle"), ("crest_flick", 1, "idle"),
+                ("look_you", 1, "idle"), ("shake", 1, "idle"), ("turn_round", 1, "idle")],
     "Hyped":   [("hop_flap", 4, "beat"), ("headbang", 3, "beat"), ("flap_burst", 3, "beat"), ("rock", 2, "beat"),
-                ("blink", 2, "idle"), ("crest_flick", 1, "idle")],
+                ("hop_travel", 3, "beat"), ("turn_hop", 2, "beat"), ("blink", 2, "idle"), ("crest_flick", 1, "idle")],
 }
 IDLE_GAPS = {"Asleep": (1800, 4500), "Curious": (500, 1600), "IntoIt": (1200, 3000), "Hyped": (1200, 3000)}
 BEAT_MS = {"Asleep": 0, "Curious": 0, "IntoIt": 560, "Hyped": 480}
@@ -126,4 +166,46 @@ BEAT_MS = {"Asleep": 0, "Curious": 0, "IntoIt": 560, "Hyped": 480}
 REACTIONS = {
     "BigHit": ["startle"], "Flurry": ["flutter"], "Sustain": ["sing"], "Swell": ["launch"], "Cut": ["point"],
     "Wake": ["wake"], "DriftOff": ["yawn"],
+}
+
+
+# --- expression marks ------------------------------------------------------------
+# Pixel drawings: '.' clear, '#' ink, 'n' navy, 's' sky, 'w' white, 'b' blue.
+MARK_COLOURS = {"#": "ink", "n": "navy", "s": "sky", "w": "white", "b": "blue", "g": "grey"}
+MARK_IMAGES = {
+    "bang": [".##.", "####", "####", ".##.", ".##.", ".##.", "....", ".##.", ".##."],
+    "bang_s": [".#.", "###", ".#.", ".#.", "...", ".#."],
+    "question": [".###.", "##.##", "...##", "..##.", ".##..", ".##..", ".....", ".##..", ".##.."],
+    "note": ["..##.", "..#.#", "..#..", ".##..", "###..", ".#..."],
+    "z_small": ["nnnn", "..n.", ".n..", "nnnn"],
+    "z_big": ["nnnnn", "...n.", "..n..", ".n...", "nnnnn"],
+    "drop": [".#.", "#s#", "#s#", ".#."],
+}
+
+
+def path(img, frames, start, end, sway=0, sway_period=12):
+    """Frames moving `img` from start to end (dx, dy offsets from the head pivot)."""
+    import math
+    out = []
+    for f in range(frames):
+        u = f / max(1, frames - 1)
+        dx = start[0] + (end[0] - start[0]) * u + sway * math.sin(2 * math.pi * f / sway_period)
+        dy = start[1] + (end[1] - start[1]) * u
+        out.append((img, round(dx), round(dy)))
+    return out
+
+
+# Offsets: head pivot -> mark's top-left, with the beak facing screen-left
+# (so + dx is behind the head). Mirrored automatically when the jay turns.
+MARKS = {
+    "bang": [("bang_s", 4, -40)] * 2 + path("bang", 16, (4, -44), (4, -46)) + [("bang_s", 4, -42)] * 2,
+    "question": path("question", 24, (6, -44), (6, -46)),
+    "notes": path("note", 30, (-14, -26), (-24, -50), sway=2),
+    "zzz": path("z_small", 22, (8, -22), (14, -34)) + path("z_big", 26, (14, -38), (22, -52), sway=1, sway_period=26),
+    "sweat": path("drop", 14, (10, -16), (22, -4)),
+}
+# move -> (mark, frame it pops at; the move must be at full strength by then)
+MOVE_MARKS = {
+    "startle": ("bang", 2), "tilt": ("question", 8), "sing": ("notes", 10),
+    "breathe": ("zzz", 10), "flutter": ("sweat", 4), "launch": ("bang", 26),
 }

@@ -25,6 +25,7 @@ Rng           rng(1);
 MoodModel     moodModel;
 Choreographer choreo(doll_gen::CHOREO, rng);
 DollPlacement placements[doll_gen::PART_COUNT];
+MarkPlacement markPlacements[CHOREO_MAX_MARKS];
 #else
 Performer     performer(gen::ART, rng);
 Brain         brain(gen::ART, rng, performer);
@@ -64,16 +65,20 @@ void dollTick(uint32_t t) {
 void dollFrame(uint32_t t, uint32_t now) {
   choreo.tick(moodModel.mood(), moodModel.energy(), t);
   composeDoll(doll_gen::DOLL, choreo.pose(), placements);
+  int marks = placeMarks(doll_gen::CHOREO, choreo, doll_gen::DOLL, placements, markPlacements);
   int rx = choreo.reaction();
   HudInfo info = {MOOD_NAMES[(int)moodModel.mood()], moodModel.energy(),
                   rx >= 0 ? doll_gen::MOVE_NAMES[rx] : nullptr, 0};
   uint32_t start = micros();
-  renderer.drawDoll(placements, hud ? &info : nullptr);
+  renderer.drawDoll(placements, markPlacements, marks, hud ? &info : nullptr);
   if (telemetry) {
-    Serial.printf("D,%u,%d,%.3f,%s,%u", now, (int)moodModel.mood(), moodModel.energy(),
-                  info.reaction ? info.reaction : "-", micros() - start);
+    Serial.printf("D,%u,%d,%.3f,%s,%u,%d", now, (int)moodModel.mood(), moodModel.energy(),
+                  info.reaction ? info.reaction : "-", micros() - start, placements[0].flip ? 1 : 0);
     for (int i = 0; i < doll_gen::PART_COUNT; i++)
       Serial.printf(",%u,%d,%d", placements[i].image, placements[i].x, placements[i].y);
+    for (int i = 0; i < CHOREO_MAX_MARKS; i++)
+      Serial.printf(",%d,%d,%d", i < marks ? markPlacements[i].image : -1, i < marks ? markPlacements[i].x : 0,
+                    i < marks ? markPlacements[i].y : 0);
     Serial.print('\n');
   }
 }

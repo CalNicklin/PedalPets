@@ -49,7 +49,7 @@ def test_tables(tmp_path):
     assert arm["axes"] == [(2, 2, 0b110)]
     assert t["axis_values"] == [0, 4, -40, 40]          # quarter units
     assert t["draw_order"] == [1, 0]
-    assert t["hop"] == 0
+    assert t["hop"] == 0 and t["x"] == -1 and t["face"] == -1
     # crop + quarter-pixel pivot/anchors
     assert t["images"][0][:4] == (2, 5, 4, 5)
     assert t["images"][0][4:6] == (16, 40)

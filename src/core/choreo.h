@@ -21,7 +21,18 @@ struct Move {
   EventType loopUntil;           // repeat while waiting for it (None = only when extended)
   uint16_t  loopMaxMs;           // from move start
   uint16_t  freezeMs;            // hold the current pose this long first (Cut)
+  uint8_t   flipAt;              // turn round after showing frame flipAt-1 (0 = never)
+  uint8_t   mark;                // expression mark to pop up (id + 1; 0 = none) ...
+  uint8_t   markAt;              // ... each time this frame is shown
 };
+
+// Expression marks ("!", notes, zzz...): little drawings near the head with
+// their own short animation. Offsets are from the anchor part's pivot to the
+// mark's top-left, for the default facing; marks are never mirrored.
+struct MarkFrame { uint8_t image; int8_t dx, dy; };
+struct MarkAnim  { uint16_t firstFrame; uint8_t frameCount; };
+struct MarkSize  { uint8_t w, h; };
+struct MarkPlacement { uint8_t image; int16_t x, y; };
 
 enum class MoveKind : uint8_t { Idle, Beat };
 struct VocabEntry { uint8_t move; uint8_t weight; MoveKind kind; };
@@ -47,6 +58,16 @@ struct Choreography {
   uint8_t              reactionCount;
   const uint8_t*       reactionMoveIds;
   uint8_t              channelCount;
+  // Stage position and facing persist (they are where the pet *is*, not a
+  // pose): x tracks are travel in the facing direction, accumulated frame by
+  // frame; facing flips at a move's flipAt. -1 = the doll has no such channel.
+  int8_t               xChannel;
+  int8_t               faceChannel;
+  const MarkAnim*      marks;
+  const MarkFrame*     markFrames;
+  uint8_t              markCount;
+  const MarkSize*      markSizes;       // per mark image
+  int8_t               markAnchorPart;  // doll part the marks hover by (the head)
 };
 
 struct ChoreoConfig {
@@ -60,9 +81,14 @@ struct ChoreoConfig {
   uint32_t pickTimeoutMs    = 1500;    // no picks for this long -> mood tempo drives beats
   float    beatAmpBase      = 0.7f;    // beat moves scale with energy: base + energy * gain
   float    beatAmpGain      = 0.5f;
+  float    stageMin         = -28;     // stage x range (pixels)
+  float    stageMax         = 28;
+  float    edgeMargin       = 12;      // heading toward an edge this close -> prefer turning
+  uint32_t edgeTurnBoost    = 4;       // weight multiplier for turns near an edge
 };
 
 constexpr int CHOREO_MAX_ACTIVE = 8;
+constexpr int CHOREO_MAX_MARKS  = 3;
 
 class Choreographer {
  public:
@@ -72,10 +98,13 @@ class Choreographer {
   void onEvent(const MusicEvent& e, Mood mood, uint32_t now);
   void onMoodChange(MoodChange change, Mood mood, uint32_t now);
   void tick(Mood mood, float energy, uint32_t now);   // once per display frame
+  void play(int move, uint32_t now);                  // start a move directly (tests, debug)
 
   const DollPose& pose() const { return pose_; }
   int  reaction() const;                     // move id of the active reaction, or -1
   int  activeCount() const;
+  int  markCount() const;
+  MarkFrame markFrame(int i) const;          // current frame of the i-th live mark, dx facing-adjusted
   float weightOf(int move) const;            // summed weight of a move's active slots
 
  private:
@@ -95,6 +124,9 @@ class Choreographer {
   Slot* reactionSlot();
   void advance(Slot& s, uint32_t now);
   float sample(const Slot& s, int channel) const;
+  float travel(int move) const;              // forward distance a move covers (pixels)
+  bool  allowed(int move) const;             // stays on stage?
+  bool  turns(int move) const { return c_.moves[move].flipAt != 0; }
 
   const Choreography& c_;
   Rng&                rng_;
@@ -111,4 +143,12 @@ class Choreographer {
   bool                started_[TRIGGER_COUNT] = {};
   uint32_t            lastStart_[TRIGGER_COUNT] = {};
   float               energy_ = 0;
+  struct LiveMark { int8_t mark = -1; uint8_t frame = 0; float facing = 1; };
+  LiveMark            marks_[CHOREO_MAX_MARKS];
+  float               stageX_ = 0;           // pixels; + is screen-right
+  float               facing_ = 1;           // +1 beak to screen-left (as rendered), -1 mirrored
 };
+
+// Screen positions for the live marks, hovering by the anchor part.
+int placeMarks(const Choreography& c, const Choreographer& ch, const DollTables& t,
+               const DollPlacement* parts, MarkPlacement* out);

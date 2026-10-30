@@ -56,14 +56,15 @@ EYES = {            # eyes channel -> eye scale x, z
     1:  ("half",   (1.0, 0.45)),
     2:  ("closed", (1.0, 0.1)),
 }
-LOOKS = rng(-30, 30, 15)
+LOOKS = rng(-30, 45, 15)        # 45 turns the head round toward the viewer
 LEANS = rng(-24, 24, 3)        # body lean: 3° keeps the neck moving <= ~1 px per step
 WING_LEANS = [-16, -8, 0, 8, 16]
 
 
 def look(l):
-    """Head look: turn plus a matching tilt."""
-    return (0.7 * l, l)
+    """Head look: turn plus a matching tilt (the tilt tops out at 30° so looking
+    out at the viewer stays a curious tilt, not a sideways head)."""
+    return (0.7 * max(-30, min(30, l)), l)
 
 
 def legs_pose(v):
@@ -105,7 +106,7 @@ def wing_pose(side):
 
 # Channels the device animates (tools/build_doll.py turns these into an enum).
 CHANNELS = ["hop", "legs", "lean", "squash", "pitch", "look", "eyes", "jaw", "crest", "tail",
-            "flapL", "flapR"]
+            "flapL", "flapR", "x", "face"]   # x: stage position (px); face: < 0 mirrored
 
 
 def axis(name, values, sources, labels=None):
@@ -126,7 +127,7 @@ PARTS = [
      "pose": body_pose},
     {"name": "head", "parent": "body", "joints": ["neck", "head", "eyeR", "eyeL"], "pivot": "head",
      "anchors": {"crest": "crest", "jaw": "jaw"},
-     "axes": [axis("pitch", rng(-36, 36, 4), ["lean", "pitch"]), axis("look", LOOKS, ["look"]),
+     "axes": [axis("pitch", rng(-36, 64, 4), ["lean", "pitch"]), axis("look", LOOKS, ["look"]),
               axis("eyes", list(EYES), ["eyes"], [v[0] for v in EYES.values()])],
      "pose": head_pose},
     {"name": "crest", "parent": "head", "joints": ["crest"], "pivot": "crest",

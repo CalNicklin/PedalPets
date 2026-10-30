@@ -2,6 +2,7 @@
 
 #if PEDALPETS_DOLL
 #include "gen/doll_meta.h"
+#include "gen/doll_moves.h"
 #include "gen/doll_pixels.h"
 namespace art = doll_gen;
 #else
@@ -44,7 +45,7 @@ void RendererTft::background() {
 }
 
 // 4-bit palette pixels straight into the sprite buffer; index 0 is transparent.
-void RendererTft::blitPal4(const uint8_t* src, int w, int h, int x0, int y0) {
+void RendererTft::blitPal4(const uint8_t* src, int w, int h, int x0, int y0, bool flip) {
   uint16_t* buf = (uint16_t*)canvas_.getPointer();
   int stride = (w + 1) / 2;
   for (int r = 0; r < h; r++) {
@@ -54,7 +55,7 @@ void RendererTft::blitPal4(const uint8_t* src, int w, int h, int x0, int y0) {
     uint16_t* dst = buf + sy * SCREEN_W;
     for (int c = 0; c < w; c++) {
       uint8_t idx = (c & 1) ? (row[c >> 1] & 0x0F) : (row[c >> 1] >> 4);
-      int sx = x0 + c;
+      int sx = flip ? x0 + w - 1 - c : x0 + c;
       if (idx && sx >= 0 && sx < SCREEN_W) dst[sx] = palette_[idx];
     }
   }
@@ -75,12 +76,17 @@ void RendererTft::finish(const HudInfo* hud) {
 }
 
 #if PEDALPETS_DOLL
-void RendererTft::drawDoll(const DollPlacement* parts, const HudInfo* hud) {
+void RendererTft::drawDoll(const DollPlacement* parts, const MarkPlacement* marks, int markCount,
+                           const HudInfo* hud) {
   background();
   for (int i = 0; i < art::DOLL.partCount; i++) {
     const DollPlacement& p = parts[art::DOLL.drawOrder[i]];
     const DollImage& im = art::IMAGES[p.image];
-    blitPal4(art::PIXELS[p.image], im.w, im.h, CANVAS_X + p.x, CANVAS_Y + p.y);
+    blitPal4(art::PIXELS[p.image], im.w, im.h, CANVAS_X + p.x, CANVAS_Y + p.y, p.flip);
+  }
+  for (int i = 0; i < markCount; i++) {        // expression marks on top, never mirrored
+    const MarkSize& sz = art::MARK_SIZES[marks[i].image];
+    blitPal4(art::MARK_PIXELS[marks[i].image], sz.w, sz.h, CANVAS_X + marks[i].x, CANVAS_Y + marks[i].y);
   }
   finish(hud);
 }
