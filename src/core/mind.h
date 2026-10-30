@@ -43,6 +43,9 @@ struct MindConfig {
   float    switchMargin   = 0.15f;  // a new target must beat the current one by this
   float    habituateMs    = 5000;   // watching the same thing gets dull
   uint32_t glanceMinMs    = 900, glanceMaxMs = 2600;
+  uint32_t greetMs        = 2500;   // waking to someone it knows: hello for this long
+  uint32_t shyMs          = 6000;   // ... to a stranger: a glance, then it keeps its eyes to itself
+  float    friendAt       = 0.5f, strangerBelow = 0.15f;
   float    performWeight  = 0.6f;   // gaze weight while dancing (the moves still show)
 };
 
@@ -58,6 +61,7 @@ class Mind {
   bool takeHeld(uint32_t now, MusicEvent& out);
   void tick(Mood mood, const Body& body, const Sighting* things, int count, uint32_t now);  // once per frame
   bool takeTurn();                         // wants to turn round to face something (once)
+  void setFamiliarity(float f) { familiarity_ = f; }   // 0 a stranger .. 1 an old friend (Bond)
   Want want() const { return want_; }      // this frame
 
   Intent      intent() const { return intent_; }
@@ -71,7 +75,7 @@ class Mind {
   struct Target { Focus focus = Focus::Nothing; int thing = -1; float x = 0, y = 0, salience = 0; bool held = false; };
 
   void   updateDrives(Mood mood, uint32_t now, float dtMs);
-  float  scoreYou(Mood mood) const;
+  float  scoreYou(Mood mood, uint32_t now) const;
   Target scoreThing(Mood mood, const Body& body, const Sighting& s, int i, uint32_t now) const;
   Target choose(Mood mood, const Body& body, const Sighting* things, int count, uint32_t now) const;
   void   aim(Mood mood, const Body& body, uint32_t now);
@@ -101,4 +105,10 @@ class Mind {
   uint32_t   behindSince_ = 0;
   bool       turn_ = false;
   Want       want_ = Want::None;
+  float      familiarity_ = 0;
+  Mood       lastMood_ = Mood::Asleep;
+  uint32_t   greetUntil_ = 0, shyUntil_ = 0;
+
+  bool greeting(uint32_t now) const { return greetUntil_ && (int32_t)(now - greetUntil_) < 0; }
+  bool shy(uint32_t now) const { return shyUntil_ && (int32_t)(now - shyUntil_) < 0; }
 };

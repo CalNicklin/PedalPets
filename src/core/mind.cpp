@@ -17,6 +17,8 @@ void Mind::reset(uint32_t now) {
   boredom_ = wantsYou_ = youBoost_ = 0;
   lastSound_ = lastPlayed_ = lastTick_ = now;
   played_ = holding_ = noticing_ = turn_ = false;
+  lastMood_ = Mood::Asleep;
+  greetUntil_ = shyUntil_ = 0;
   for (int i = 0; i < MIND_MAX_SIGHTINGS; i++) { interest_[i] = 1; wasResting_[i] = true; landedAt_[i] = 0; }
   nextGlance_ = now + rng_.range(cfg_.glanceMinMs, cfg_.glanceMaxMs);
   glanceUntil_ = now;
@@ -68,7 +70,7 @@ void Mind::updateDrives(Mood mood, uint32_t now, float dtMs) {
   if (mood == Mood::Curious && silence > cfg_.boredAfterMs) boredom_ += dtMs / cfg_.boredRiseMs;
   else if (mood != Mood::Curious) boredom_ -= dtMs / 2000.0f;
   bool missed = played_ && now - lastPlayed_ > cfg_.wantsYouAfterMs && now - lastPlayed_ < cfg_.wantsYouMemoryMs;
-  if (missed && mood != Mood::Asleep) wantsYou_ += dtMs / cfg_.wantsYouRiseMs;
+  if (missed && mood != Mood::Asleep) wantsYou_ += dtMs / (cfg_.wantsYouRiseMs * (1.5f - familiarity_));  // friends miss you sooner
   else if (!missed) wantsYou_ -= dtMs / 3000.0f;
   boredom_ = clampf(boredom_, 0, 1);
   wantsYou_ = clampf(wantsYou_, 0, 1);
@@ -76,8 +78,10 @@ void Mind::updateDrives(Mood mood, uint32_t now, float dtMs) {
 
 // --- attention --------------------------------------------------------------------
 
-float Mind::scoreYou(Mood mood) const {
-  return 0.25f + 0.5f * wantsYou_ + youBoost_ + (dancing(mood) ? 0.3f : 0.0f);
+float Mind::scoreYou(Mood mood, uint32_t now) const {
+  if (greeting(now)) return 2.0f;                               // hello!
+  float shyness = shy(now) ? 0.3f : 0.0f;                       // a stranger: eyes to itself
+  return 0.25f + 0.5f * wantsYou_ + youBoost_ + (dancing(mood) ? 0.3f : 0.0f) - shyness;
 }
 
 // How interesting a sighting is right now: a flying leaf (motion, nearness),
@@ -97,7 +101,7 @@ Mind::Target Mind::scoreThing(Mood mood, const Body& body, const Sighting& s, in
 }
 
 Mind::Target Mind::choose(Mood mood, const Body& body, const Sighting* things, int count, uint32_t now) const {
-  Target best = {Focus::You, -1, 0, 0, scoreYou(mood)};
+  Target best = {Focus::You, -1, 0, 0, scoreYou(mood, now)};
   for (int i = 0; i < count; i++) {
     Target t = scoreThing(mood, body, things[i], i, now);
     if (t.salience > best.salience) best = t;
@@ -162,8 +166,10 @@ void Mind::aim(Mood mood, const Body& body, uint32_t now) {
 void Mind::decide(Mood mood, uint32_t now) {
   Intent want = Intent::None;
   bool holding = focus_ == Focus::Leaf && target_.held;
+  bool friendHello = greeting(now) && familiarity_ >= cfg_.friendAt;
   if (mood == Mood::Curious) {
-    if (holding) want = Intent::Investigate;
+    if (friendHello) want = Intent::WantsYou;                   // waves, bounces: you're back!
+    else if (holding) want = Intent::Investigate;
     else if (focus_ == Focus::Leaf) want = Intent::Watch;
     else if (focus_ == Focus::Spot) want = Intent::Investigate;
     else if (wantsYou_ >= cfg_.intentOn) want = Intent::WantsYou;
@@ -171,7 +177,7 @@ void Mind::decide(Mood mood, uint32_t now) {
   }
   if (want == intent_) return;
   // Noticing things is instant; settling into a mood of wanting takes a moment.
-  bool urgent = want == Intent::Watch || want == Intent::Investigate || mood != Mood::Curious;
+  bool urgent = want == Intent::Watch || want == Intent::Investigate || friendHello || mood != Mood::Curious;
   if (!urgent && now - intentSince_ < cfg_.minIntentMs) return;
   intent_ = want;
   intentSince_ = now;
@@ -197,6 +203,12 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
   float dtMs = (float)(now - lastTick_);
   lastTick_ = now;
   updateDrives(mood, now, dtMs);
+  if (lastMood_ == Mood::Asleep && mood != Mood::Asleep) {      // woken: who is it?
+    bool stranger = familiarity_ < cfg_.strangerBelow;
+    greetUntil_ = now + (stranger ? cfg_.greetMs / 3 : cfg_.greetMs);
+    shyUntil_ = stranger ? now + cfg_.shyMs : 0;
+  }
+  lastMood_ = mood;
 
   if (mood == Mood::Asleep) {
     focus_ = Focus::Nothing;
@@ -217,7 +229,7 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
   // against near rivals (and follows it as it moves).
   Target best = choose(mood, body, things, count, now);
   Target current;
-  if (target_.focus == Focus::You) current = {Focus::You, -1, 0, 0, scoreYou(mood)};
+  if (target_.focus == Focus::You) current = {Focus::You, -1, 0, 0, scoreYou(mood, now)};
   else if (target_.thing >= 0 && target_.thing < count)
     current = scoreThing(mood, body, things[target_.thing], target_.thing, now);
   bool same = best.focus == current.focus && best.thing == current.thing;
@@ -231,7 +243,9 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
     else interest_[i] = fminf(1.0f, interest_[i] + dtMs / (cfg_.habituateMs * 2));
   }
   // You only hold attention when there's reason to look (playing, missing you).
-  if (target_.focus == Focus::You && !dancing(mood) && youBoost_ < 0.05f && wantsYou_ < 0.3f && !noticing_)
+  bool hello = greeting(now);
+  if (target_.focus == Focus::You && !dancing(mood) && !noticing_ && !hello &&
+      ((youBoost_ < 0.05f && wantsYou_ < 0.3f) || shy(now)))
     target_ = Target();
   focus_ = target_.focus;
 
@@ -240,6 +254,10 @@ void Mind::tick(Mood mood, const Body& body, const Sighting* things, int count, 
   act(body, count);
 
   if (noticing_) return;                           // keep "whoa!" until it reacts
+  if (hello && mood != Mood::Asleep) {
+    think(familiarity_ >= cfg_.friendAt ? "you're back!" : familiarity_ < cfg_.strangerBelow ? "who's this?" : "oh - hi");
+    return;
+  }
   switch (intent_) {
     case Intent::Watch:       think("ooh a leaf - watching it"); break;
     case Intent::Investigate:

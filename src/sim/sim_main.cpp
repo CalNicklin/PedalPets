@@ -6,7 +6,8 @@
 //   usage: program "<key>@<ms> ..." <duration_ms> [seed]
 //   e.g.   program "1@500" 90000 > sim.csv
 //   PET_CHAR=<name> / PET_SCENE=<name|none> pick the packs (default: the first of each);
-//   PEDALPETS_CHANNELS=1 appends the raw channel values to each row.
+//   PEDALPETS_CHANNELS=1 appends the raw channel values to each row;
+//   PET_MEMORY=<file> keeps its memory of you between runs (like the board's flash).
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -73,6 +74,15 @@ int main(int argc, char** argv) {
   uint32_t tickCount = 0;
   DollPet pet(*character, rng);
   pet.setScene(scene);
+  const char* memFile = getenv("PET_MEMORY");
+  if (memFile) {
+    PlayerMemory m;
+    if (FILE* f = fopen(memFile, "rb")) {
+      if (fread(&m, sizeof(m), 1, f) != 1) m = PlayerMemory();
+      fclose(f);
+    }
+    pet.bond.load(m);
+  }
   pet.reset(0, TELEMETRY_LEAVES);
   const int parts = character->doll.partCount;
   static char line[1024];
@@ -115,6 +125,14 @@ int main(int argc, char** argv) {
       printf(",headx=%d", pet.canvasX() + hx);
     }
     printf("\n");
+  }
+  if (memFile) {
+    if (FILE* f = fopen(memFile, "wb")) {
+      fwrite(&pet.bond.memory(), sizeof(PlayerMemory), 1, f);
+      fclose(f);
+    }
+    fprintf(stderr, "memory: %u sessions, %u s played, familiarity %.2f\n", (unsigned)pet.bond.memory().sessions,
+            (unsigned)pet.bond.memory().playSeconds, pet.bond.familiarity());
   }
   return 0;
 }

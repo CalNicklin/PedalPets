@@ -4,7 +4,7 @@
 #include "scripts.h"
 
 // Keyboard / scripted stand-in for the live audio detectors.
-// Keys: p P h f s S w W c + - 0 1-4 n b d t r (see key()).
+// Keys: p P h f s S w W c + - 0 1-4 n b x d t r (see key()).
 class MockInput {
  public:
   void     reset();
@@ -17,6 +17,7 @@ class MockInput {
   bool     takeTelemetryToggle() { bool r = telemetry_; telemetry_ = false; return r; }
   bool     takeNextCharacter() { bool r = nextChar_; nextChar_ = false; return r; }
   bool     takeNextScene()     { bool r = nextScene_; nextScene_ = false; return r; }
+  bool     takeForget()        { bool r = forget_; forget_ = false; return r; }
 
  private:
   void  schedule(EventType type, float strength, uint32_t at);
@@ -35,5 +36,5 @@ class MockInput {
   const Script* script_ = nullptr;
   uint32_t   scriptStart_ = 0;
   uint16_t   fired_[MAX_SCRIPT] = {};
-  bool       hud_ = false, reset_ = false, telemetry_ = false, nextChar_ = false, nextScene_ = false;
+  bool       hud_ = false, reset_ = false, telemetry_ = false, nextChar_ = false, nextScene_ = false, forget_ = false;
 };

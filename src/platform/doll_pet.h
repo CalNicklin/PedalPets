@@ -7,6 +7,7 @@
 #include "core/crowd.h"
 #include "core/doll.h"
 #include "core/leaves.h"
+#include "core/memory.h"
 #include "core/mind.h"
 #include "core/mood.h"
 #include "core/pack.h"
@@ -42,12 +43,18 @@ class DollPet {
   // a double-take; it comes out of tick() a moment later.
   void event(const MusicEvent& e, uint32_t now) {
     crowd.onEvent(e, now);
+    bond.onEvent(e, now);
     MoodChange c = mood.onEvent(e, now);
-    if (c == MoodChange::Woke) { choreo.onMoodChange(c, mood.mood(), now); return; }  // waking eats the event
+    if (c == MoodChange::Woke) {                    // waking eats the event
+      bond.onWake(now);
+      choreo.onMoodChange(c, mood.mood(), now);
+      return;
+    }
     if (mind.onEvent(e, mood.mood(), now)) choreo.onEvent(e, mood.mood(), now);
   }
 
   void tick(const Features& f, uint32_t now) {
+    bond.tick(mood.mood(), now);
     MusicEvent held;
     if (mind.takeHeld(now, held)) choreo.onEvent(held, mood.mood(), now);
     MoodChange c = mood.tick(f, now);
@@ -63,6 +70,7 @@ class DollPet {
       const Leaf& l = leaves.leaf(i);
       sightings_[i] = {l.x, l.y, l.vx, l.vy, l.resting, l.heldBy >= 0};
     }
+    mind.setFamiliarity(bond.familiarity());
     mind.tick(mood.mood(), body, sightings_, n, now);
     if (mind.takeTurn()) choreo.requestTurn(now);
     if (mind.want() == Want::Approach) choreo.requestMove(ch.approachMove, now);
@@ -111,6 +119,7 @@ class DollPet {
   Mind            mind;
   Choreographer   choreo;
   Crowd           crowd;
+  Bond            bond;           // its memory of you: load it at start, save it when it asks (it survives reset())
   LeafField       leaves;
   PetMotionSensor motion;
   DollPlacement   parts[DOLL_MAX_PARTS];

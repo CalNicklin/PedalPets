@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <Preferences.h>
 #include <esp_system.h>
 #include "core/timing.h"
 #include "gen/packs.h"
@@ -20,6 +21,21 @@ bool        telemetry = false;  // one CSV line per frame, for tools/doll_timeli
 uint32_t    nextTick = 0;       // fixed grid: logic every TICK_MS, render every 3rd tick
 uint32_t    tickCount = 0;
 char        line[1024];
+Preferences prefs;              // the pet's memory of you, in flash (NVS)
+
+void loadMemory() {
+  PlayerMemory m;
+  if (prefs.getBytesLength("mem") == sizeof(m)) prefs.getBytes("mem", &m, sizeof(m));
+  pet.bond.load(m);
+  Serial.printf("memory: %u sessions, %u s played, familiarity %.2f\n", (unsigned)pet.bond.memory().sessions,
+                (unsigned)pet.bond.memory().playSeconds, pet.bond.familiarity());
+}
+
+void saveMemoryIfDue(uint32_t now) {
+  if (!pet.bond.wantsSave(now)) return;
+  prefs.putBytes("mem", &pet.bond.memory(), sizeof(PlayerMemory));
+  pet.bond.saved(now);
+}
 
 const Scene* currentScene() { return SCENE_COUNT ? SCENES[sceneIndex] : nullptr; }
 
@@ -70,9 +86,11 @@ void setup() {
   Serial.begin(115200);
   rng = Rng(esp_random());
   renderer.begin();
+  prefs.begin("pedalpets", false);
+  loadMemory();
   resetAll(millis());
   Serial.println("PedalPets ready. Keys: p P h f s S w W c + - 0 | 1-4 scripts | n character | b scene | "
-                 "d HUD | t telemetry | r reset");
+                 "x forget me | d HUD | t telemetry | r reset");
 }
 
 namespace {
@@ -89,6 +107,11 @@ void handleKey(char c, uint32_t now) {
     resetAll(now);
   }
   if (mock.takeReset()) resetAll(now);
+  if (mock.takeForget()) {
+    pet.bond.load(PlayerMemory());
+    prefs.putBytes("mem", &pet.bond.memory(), sizeof(PlayerMemory));
+    Serial.println("memory: forgotten");
+  }
   if (mock.takeHudToggle()) hud = !hud;
   if (mock.takeTelemetryToggle()) {
     telemetry = !telemetry;
@@ -111,4 +134,5 @@ void loop() {
   while (mock.pop(t, e)) pet.event(e, t);
   pet.tick(mock.features(t), t);
   if (++tickCount % TICKS_PER_FRAME == 0) frame(t, now);
+  if (tickCount % 100 == 0) saveMemoryIfDue(t);   // checked once a second; saves rarely
 }

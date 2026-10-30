@@ -11,14 +11,20 @@ static Mind* mind = nullptr;
 static uint32_t t;
 static Body body = {80, 70, 1, 0, 10};   // head at screen (80, 70), facing screen-left, reaches 10 px ahead
 
-static void fresh() {
+static void freshAsleep() {
   delete mind;
   rng = Rng(1);
   mind = new Mind(rng);
   t = 0;
   mind->reset(t);
 }
-static void run(Mood m, int frames, const Sighting* s = nullptr, int n = 0) {
+static void run(Mood m, int frames, const Sighting* s = nullptr, int n = 0);
+// Awake and past the wake-up hello (and a stranger's shyness), unless a test is about waking.
+static void fresh() {
+  freshAsleep();
+  run(Mood::Curious, 220);
+}
+static void run(Mood m, int frames, const Sighting* s, int n) {
   for (int i = 0; i < frames; i++) { t += 30; mind->tick(m, body, s, n, t); }
 }
 static bool send(EventType e, Mood m, float strength = 1.0f) { return mind->onEvent({e, t, strength}, m, t); }
@@ -138,6 +144,43 @@ void test_a_leaf_in_hand_holds_its_attention() {
   TEST_ASSERT_NOT_NULL(strstr(mind->thought(), "leaf"));
 }
 
+static void wakeUp(float familiarity) {
+  freshAsleep();
+  mind->setFamiliarity(familiarity);
+  run(Mood::Asleep, 10);
+  send(EventType::Pick, Mood::Asleep);
+  run(Mood::Curious, 3);
+}
+
+void test_an_old_friend_gets_a_warm_hello() {
+  wakeUp(0.9f);
+  TEST_ASSERT_NOT_NULL(strstr(mind->thought(), "you're back"));
+  TEST_ASSERT_EQUAL(Focus::You, mind->focus());
+  TEST_ASSERT_EQUAL(Intent::WantsYou, mind->intent());       // waves, bounces
+}
+
+void test_a_stranger_gets_a_shy_glance() {
+  wakeUp(0.0f);
+  TEST_ASSERT_NOT_NULL(strstr(mind->thought(), "who"));
+  TEST_ASSERT_EQUAL(Focus::You, mind->focus());               // a look...
+  TEST_ASSERT_TRUE(mind->intent() != Intent::WantsYou);
+  run(Mood::Curious, 50);                                     // ...then away
+  TEST_ASSERT_TRUE(mind->focus() != Focus::You);
+}
+
+void test_a_friend_misses_you_sooner() {
+  int when[2];
+  for (int k = 0; k < 2; k++) {
+    fresh();
+    mind->setFamiliarity(k ? 1.0f : 0.0f);
+    playFor(Mood::IntoIt, 4);
+    int f = 0;
+    while (mind->intent() != Intent::WantsYou && f < 2000) { run(Mood::Curious, 1); f++; }
+    when[k] = f;
+  }
+  TEST_ASSERT_TRUE(when[1] < when[0]);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_loud_hit_after_quiet_gets_a_double_take);
@@ -151,5 +194,8 @@ int main() {
   RUN_TEST(test_playing_hard_it_performs_to_you);
   RUN_TEST(test_it_walks_up_to_a_landed_leaf_then_reaches_for_it);
   RUN_TEST(test_a_leaf_in_hand_holds_its_attention);
+  RUN_TEST(test_an_old_friend_gets_a_warm_hello);
+  RUN_TEST(test_a_stranger_gets_a_shy_glance);
+  RUN_TEST(test_a_friend_misses_you_sooner);
   return UNITY_END();
 }
