@@ -31,6 +31,7 @@ Backends:
 """
 
 import argparse
+import glob
 import json
 import os
 import random
@@ -349,7 +350,7 @@ def serve(port_name, http_port=8765):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", default="/dev/cu.usbserial-10")
+    ap.add_argument("--port", default=(sorted(glob.glob("/dev/cu.usbserial-*")) or ["/dev/cu.usbserial-10"])[0])
     ap.add_argument("--serve", action="store_true", help="a local page to start rounds and watch them")
     ap.add_argument("--http-port", type=int, default=8765)
     ap.add_argument("--backend", choices=["rules", "claude"], default="claude")

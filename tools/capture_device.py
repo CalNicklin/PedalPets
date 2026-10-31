@@ -12,6 +12,7 @@ banner, turns telemetry on (`t`), sends --keys, then records `T,...` lines.
 """
 
 import argparse
+import glob
 import time
 
 import serial
@@ -31,7 +32,7 @@ MARKS = 3   # CHOREO_MAX_MARKS
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
-    ap.add_argument("--port", default="/dev/cu.usbserial-10")
+    ap.add_argument("--port", default=(sorted(glob.glob("/dev/cu.usbserial-*")) or ["/dev/cu.usbserial-10"])[0])
     ap.add_argument("--keys", default="1")
     ap.add_argument("--seconds", type=float, default=90)
     a = ap.parse_args()
